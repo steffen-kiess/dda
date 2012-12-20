@@ -1,0 +1,76 @@
+#
+# Copyright (c) 2010-2012 Steffen Kieß
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+#
+
+LIBS = $(ROOT)/LinAlg/LinAlg $(ROOT)/OpenCL/OpenCL \
+	$(ROOT)/Core/Core $(ROOT)/HDF5/HDF5 $(ROOT)/EMSim/EMSim
+
+AddDefs ($(LibBoost.Filesystem) $(LibBoost.Thread) $(LibBoost.ProgramOptions))
+
+OpenCLStubNamespace = DDA
+OpenCLSource (GpuMatVec GpuTransposePlan GpuIterativeSolver GpuQmrCs \
+	GpuFieldCalculator)
+.DEFAULT: $(OpenCLSourceDefaults)
+
+LDFLAGS += -lhdf5
+DDA_SOURCES = DDAMain DDAParams IterativeSolverBase \
+	CpuIterativeSolver QmrCs MatVec Cgnr \
+	MatVecCpu MatVecGpu GpuMatVec GpuMatVec.stub \
+	GpuTransposePlan GpuTransposePlan.stub Geometry \
+	GpuIterativeSolver GpuIterativeSolver.stub GpuCgnr \
+	GpuQmrCs GpuQmrCs.stub BicgCs BicgStab GpuBicgCs GpuBicgStab \
+	DMatrixCpu DMatrixGpu DipVector \
+	DipoleGeometry Beam FarFieldCalc AddaOptions \
+	PolarizabilityDescription FieldCalculator \
+	CpuFieldCalculator GpuFieldCalculator GpuFieldCalculator.stub \
+	ToString AbsCross DataFilesDDAUtil \
+	Shapes GeometryParser Load Options BeamPolarization FPConst \
+	GpuFFTPlans Debug
+section
+	if $(defined DDADefs)
+		AddDefs ($(DDADefs))
+		export
+	CDefineTargets (GeometryParser DDAMain Options GpuFFTPlans)
+	CLink (sd+, DDA, $(DDA_SOURCES))
+section
+	LIBS += $(ROOT)/DDA/DDA
+	CLink (ed+T, DDA, MainCaller)
+
+section
+	LIBS = $(ROOT)/Core/Core
+	CLink (ed+, FieldDiff, FieldDiff)
+
+# Execute tests and compare the results to adda for various options
+test.log: test-adda.sh compare-adda.sh DDA FieldDiff ../EMSim/Hdf5Util adda_scat_params.dat
+	logcmdquiet $@ ./test-adda.sh --ftype double
+test-cpu.log: test-adda.sh compare-adda.sh DDA FieldDiff ../EMSim/Hdf5Util adda_scat_params.dat
+	logcmdquiet $@ ./test-adda.sh --prefix cpu --cpu --ftype double
+test-f.log: test-adda.sh compare-adda.sh DDA FieldDiff ../EMSim/Hdf5Util adda_scat_params.dat
+	logcmdquiet $@ ./test-adda.sh --prefix f --no-exact-cmp --max-error 1e-3 --ftype float
+test-f-cpu.log: test-adda.sh compare-adda.sh DDA FieldDiff ../EMSim/Hdf5Util adda_scat_params.dat
+	logcmdquiet $@ ./test-adda.sh --prefix f-cpu --no-exact-cmp --max-error 1e-3 --cpu --ftype float
+test-l-cpu.log: test-adda.sh compare-adda.sh DDA FieldDiff ../EMSim/Hdf5Util adda_scat_params.dat
+	logcmdquiet $@ ./test-adda.sh --prefix l-cpu --no-exact-cmp --cpu --ftype ldouble
+test-dmhost.log: test-adda.sh compare-adda.sh DDA FieldDiff ../EMSim/Hdf5Util adda_scat_params.dat
+	logcmdquiet $@ ./test-adda.sh --prefix dmhost --dmatrix-host --ftype double
+test: test.log test-cpu.log test-l-cpu.log test-f.log test-f-cpu.log test-dmhost.log
+clean:
+	rm -f test.log test-cpu.log test-l-cpu.log test-f.log test-f-cpu.log test-dmhost.log

@@ -1,0 +1,13 @@
+global_type=grid
+
+theta:
+type=range
+N=91
+min=0	
+max=180
+
+phi:
+type=range
+N=61
+min=0
+max=360

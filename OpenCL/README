@@ -1,0 +1,4 @@
+This directory contains OpenCL-related functionality.
+
+This is e.g. a stub generation utility which generates C++ stubs for OpenCL
+kernels.

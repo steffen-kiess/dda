@@ -1,0 +1,351 @@
+#
+# Copyright (c) 2010-2012 Steffen Kieß
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+#
+
+# A heavily modified version of the omake build/C.om file
+#
+# This version will track linker flags etc. for static libraries (i.e. if you
+# set LDFLAGS for a static library all executables / dynamic libraries which
+# include this static library will use these LDFLAGS).
+#
+# Only tested under Linux, will probably not work on Windows.
+
+# In order to create a static or dynamic library or an executable use:
+# CLink (FLAGS, TARGET, FILES)
+#
+# TARGET and FILES are without extensions.
+#
+# FLAGS is a string containing the characters:
+# e = executable / l = dynamic library / s = static library (exactly one needed)
+# d = create .DEFAULT rule
+# + = use C++ linker
+# i = use this scope for implicit rules for source files
+# T = for executables: create test target $(TARGET).log / t = test target, include in 'test' phony target
+
+
+open build/Common
+
+open OMake/Util
+
+CC = gcc
+CXX = g++
+AR(name) =
+    return(ar cq $(name))
+RANLIB = ranlib
+LD = ld
+
+# MacOS X specific config
+if $(equal $(SYSNAME), Darwin)
+    LDFLAGS_DLL = -dynamiclib
+    export
+else
+    LDFLAGS_DLL = -shared
+    export
+
+#CXX_EXTS[] = .cpp .cc .c++
+CXX_EXTS[] = .cpp
+
+private.CParameters = LIBS USE_CXX STATICLIBS CFLAGS CXXFLAGS DYNLIBS DYNLIBDIRS LDYNLIBS LDFLAGS WRAPPERDEPS INCLUDES SYSTEM_INCLUDES
+
+private.CFileOptions = STATICLIBS DYNLIBS DYNLIBDIRS LDYNLIBS WRAPPERDEPS
+private.CStringOptions = LDFLAGS USE_CXX
+private.COptions = $(CFileOptions) $(CStringOptions)
+
+CTestDep[] =
+CTestArguments[] =
+
+CRuleDefaultTargets[] =
+
+private.DeclareIfNotExists (names) =
+	foreach (name, $(names))
+		if $(not $(defined $(name)))
+			setvar ($(name), $(EMPTY))
+			export
+		export
+	export
+
+foreach (Parameter, $(CParameters))
+	DeclareIfNotExists ($(Parameter))
+	export
+
+OBJDUMP = objdump
+
+public.LocalCGeneratedFiles(files) =
+    .SCANNER: scan-c-%: $(files)
+    .SCANNER: scan-cxx-%: $(files)
+    .SCANNER: scan-ct-%: $(files)
+    .SCANNER: scan-cxxt-%: $(files)
+    export
+
+private.GetIfExist (v) =
+	if $(defined $(v))
+		value $(getvar $(v))
+	else
+		value
+
+ALL_PREFIXED_INCLUDES() =
+	value $(addprefix -isystem, $(SYSTEM_INCLUDES)) $(addprefix -I, $(INCLUDES))
+
+CDefineTargets (NAMES) =
+	$(addsuffix .o, $(NAMES)):
+	export
+
+%.o: %.c :scanner: scan-ct-%.c
+    $(CC) $(CFLAGS) $(CFLAGS) $(ALL_PREFIXED_INCLUDES) -c -o $@ $<
+foreach(CXX_EXT, $(CXX_EXTS))
+    %.o: %$(CXX_EXT) :scanner: scan-cxxt-%$(CXX_EXT)
+        $(CXX) $(CXXFLAGS) $(ALL_PREFIXED_INCLUDES) -c -o $@ $<
+    export
+
+.SCANNER: scan-ct-%.c: %.c /.PHONY/CGeneratedFilesTarget :value: $(digest-in-path-optional $(SYSTEM_INCLUDES) $(INCLUDES), $&)
+    $(CC) $(CFLAGS) $(ALL_PREFIXED_INCLUDES) -MM $<
+foreach(CXX_EXT, $(CXX_EXTS))
+    .SCANNER: scan-cxxt-%$(CXX_EXT): %$(CXX_EXT) /.PHONY/CGeneratedFilesTarget :value: $(digest-in-path-optional $(SYSTEM_INCLUDES) $(INCLUDES), $&)
+        $(CXX) $(CXXFLAGS) $(ALL_PREFIXED_INCLUDES) -MM $<
+    export .RULE
+
+CParseDep (name) =
+	scan (A, $(name).dep)
+	default
+		if $(mem $1, $(CFileOptions))
+			section
+				cd $(dirof $(name))
+				F = $(file $2)
+				export F
+			if $(not $(mem $F, $(getvar Scanned_$1)))
+				setvar (Scanned_$1, $(getvar Scanned_$1) $F)
+				export
+			export
+		elseif $(mem $1, $(CStringOptions))
+			if $(not $(mem $2, $(getvar Scanned_$1)))
+				setvar (Scanned_$1, $(getvar Scanned_$1) $2)
+				export
+			export
+		else
+			eprintln (Unknown property in $(name): $0)
+			exit (1)
+		export
+	export
+
+CWriteDepFile (file) =
+	foreach (opt, $(COptions))
+		foreach (val, $(getvar Scanned_$(opt)))
+			fprintln ($(file), $(opt) "$(ocaml-escaped $(val))")
+
+CParseDepFiles () =
+	foreach (var, $(COptions))
+		setvar (Scanned_$(var), $(EMPTY))
+		export
+
+	foreach (lib, $(LIBS))
+		CParseDep ($(lib))
+		export
+
+	foreach (opt, $(filter-out LIBS, $(CFileOptions)))
+		foreach (val, $(getvar $(opt)))
+			val = $(file $(val))
+			if $(not $(mem $(val), $(getvar Scanned_$(opt))))
+				setvar (Scanned_$(opt), $(getvar Scanned_$(opt)) $(val))
+				export
+			export
+		export
+	foreach (opt, $(CStringOptions))
+		foreach (val, $(getvar $(opt)))
+			if $(not $(mem $(val), $(getvar Scanned_$(opt))))
+				setvar (Scanned_$(opt), $(getvar Scanned_$(opt)) $(val))
+				export
+			export
+		export
+
+	if $(not $(equal $(Scanned_USE_CXX), $(EMPTY)))
+		Scanned_USE_CXX = 1
+		export
+
+	export
+
+CCleanAll () =
+	clean:
+		rm -f *.o *.bin *.exe *.a *.dep *.dynlibs *.fdynlibs *.lin-*.sh *.win-*.bat *.so *.dll *.log
+
+CLink (FLAGS, TARGET, FILES) =
+	FLAGS = $(string $(FLAGS))
+	FLAGS_ARR[] =
+	i = 0
+	while $(lt $(i), $(string-length $(FLAGS)))
+		f = $(FLAGS.nth $(i))
+		if $(not $(mem $(f), e l s d + i t T))
+			raise $(CMakeException $"Got unknown flag '$(f)' in '$(FLAGS)'")
+		if $(mem $(f), $(FLAGS_ARR))
+			raise $(CMakeException $"Got flag '$(f)' twice in '$(FLAGS)'")
+		FLAGS_ARR += $(f)
+		i = $(add $(i), 1)
+	if $(not $(equal $(add \
+			$(if $(mem e, $(FLAGS_ARR)), 1, 0) \
+			$(if $(mem l, $(FLAGS_ARR)), 1, 0) \
+			$(if $(mem s, $(FLAGS_ARR)), 1, 0) \
+			), 1))
+		raise $(CMakeException $"Exactly one of the 'e' or 'l' flags must be set, got '$(FLAGS)'")
+	if $(gt $(length $(filter t T, $(FLAGS_ARR))), 1)
+		raise $(CMakeException $"Only one of the 't' and 'T' flags allowed, got '$(FLAGS)'")
+	if $(and $(or $(mem t, $(FLAGS_ARR)), $(mem T, $(FLAGS_ARR))), $(not $(mem e, $(FLAGS_ARR))))
+		raise $(CMakeException $"Got flag 't' or 'T' without 'e' in '$(FLAGS)'")
+
+	if $(mem i, $(FLAGS_ARR))
+		foreach (FILE, $(FILES))
+			$(FILE).o:
+	if $(mem +, $(FLAGS_ARR))
+		USE_CXX = 1
+		export
+	if $(mem l, $(FLAGS_ARR))
+		private.TARGET_TYPE = EXT_DLL
+		export TARGET_TYPE
+	elseif $(mem e, $(FLAGS_ARR))
+		private.TARGET_TYPE = EXE
+		export TARGET_TYPE
+	elseif $(mem s, $(FLAGS_ARR))
+		private.TARGET_TYPE = EXT_LIB
+		export TARGET_TYPE
+	else
+		raise $(CMakeException Should not be reached)
+	if $(or $(mem t, $(FLAGS_ARR)), $(mem T, $(FLAGS_ARR)))
+		$(TARGET).log: $(TARGET)$(EXE) $(CTestDep)
+			logcmdquiet $@ $(dirof $(TARGET))/$(basename $(TARGET))$(EXE) $(CTestArguments)
+		.PHONY: alltest
+		alltest: $(TARGET).log
+		if $(mem t, $(FLAGS_ARR))
+			.PHONY: test
+			test: $(TARGET).log
+		clean:
+			rm -f $(TARGET).log
+	private.TARGET_FILE = $(TARGET)$(getvar $(TARGET_TYPE))
+	private.OFILES = $(addsuffix $(EXT_OBJ), $(FILES))
+	AllValues[] =
+	foreach (var, $(COptions))
+		AllValues += $(addprefix $(var)=, $(getvar $(var)))
+		export
+	if $(or $(mem l, $(FLAGS_ARR)), $(mem s, $(FLAGS_ARR)))
+		$(TARGET).dep: $(addsuffix .dep, $(LIBS)) :value: $(AllValues)
+			section
+				CParseDepFiles ()
+				if $(mem l, $(FLAGS_ARR))
+#					# Clear stuff not needed for dynlib dep-files
+					Scanned_USE_CXX = $(EMPTY)
+					Scanned_STATICLIBS[] =
+#					# Add library itself
+					Scanned_DYNLIBS += $(TARGET_FILE)
+					Scanned_LDYNLIBS += $(TARGET)
+					export
+				else
+					Scanned_STATICLIBS[] += $(TARGET)
+					export
+				file = $(fopen $(TARGET).dep, w)
+				CWriteDepFile ($(file))
+				close ($(file))
+	GetLinkCmd () =
+		CParseDepFiles ()
+		if $(equal $(Scanned_USE_CXX), $(EMPTY))
+			private.compiler = $(CC)
+			export compiler
+		else
+			private.compiler = $(CXX)
+			export compiler
+		if $(mem l, $(FLAGS_ARR))
+			Scanned_LDFLAGS += $(LDFLAGS_DLL)
+#			# Do not use dllexport, simply export all symbols (like under linux)
+			if $(equal $(SYSNAME), Windows)
+				Scanned_LDFLAGS += -Wl,--export-all
+				export
+#			# Use -whole-archive to export all symbols in static libraries
+			value $(compiler) -o $(TARGET_FILE) $,(OFILES) -Wl,-whole-archive $(addsuffix $(EXT_LIB), $(rev $(Scanned_STATICLIBS))) -Wl,-no-whole-archive $(addprefix -L, $(rev $(Scanned_DYNLIBDIRS))) $(rev $(Scanned_DYNLIBS)) $(rev $(Scanned_LDFLAGS))
+		elseif $(mem e, $(FLAGS_ARR))
+			value $(compiler) -o $(TARGET_FILE) $,(OFILES) $(addsuffix $(EXT_LIB), $(rev $(Scanned_STATICLIBS))) $(addprefix -L, $(rev $(Scanned_DYNLIBDIRS))) $(rev $(Scanned_DYNLIBS)) $(rev $(Scanned_LDFLAGS))
+		else
+			raise $(CMakeException Should not be reached)
+	if $(or $(mem e, $(FLAGS_ARR)), $(mem l, $(FLAGS_ARR)))
+		$(TARGET_FILE): $(OFILES) $(addsuffix .dep, $(LIBS)) :scanner: scan-link-$(TARGET_FILE)
+			$(GetLinkCmd)
+	elseif $(mem s, $(FLAGS_ARR))
+		$(TARGET_FILE): $(OFILES)
+			rm -f $@
+			$(AR $@) $(OFILES)
+			$(RANLIB) $@
+	else
+		raise $(CMakeException Should not be reached)
+	.SCANNER: scan-link-$(TARGET_FILE): $(addsuffix .dep, $(LIBS)) :value: $(AllValues)
+		section
+			CParseDepFiles ()
+			println ($(string-escaped $(TARGET_FILE)): $(string $(string-escaped $(addsuffix $(EXT_LIB), $(Scanned_STATICLIBS)))) $(string $(string-escaped $(Scanned_DYNLIBS))))
+	clean:
+		rm -f $(TARGET_FILE) $(TARGET).dynlibs $(TARGET).fdynlibs
+	CRuleDefaultTargets += $(TARGET)$(getvar $(TARGET_TYPE))
+	if $(or $(mem l, $(FLAGS_ARR)), $(mem s, $(FLAGS_ARR)))
+		CRuleDefaultTargets += $(TARGET).dep
+		export
+	CCleanAll ()
+	if $(mem d, $(FLAGS_ARR))
+		.DEFAULT: $(CRuleDefaultTargets)
+
+CLibraryDefinition. =
+	class CLibraryDefinition
+
+CMakeException (msg) =
+	e = $(RuntimeException)
+	e.message = $(msg)
+	value $(e)
+
+AddDefs (libs) =
+	foreach (lib, $(libs))
+		private.lib = $(lib)
+		if $(not $(obj-instanceof $(lib), CLibraryDefinition))
+			raise $(CMakeException $"Argument $(lib) is not an instance of CLibraryDefinition")
+		private.Name = $(lib.Name)
+#		println ($"Argument $(lib) $(Name)")
+		if $(lib.object-mem Uses)
+			foreach (lib2, $(lib.Uses))
+				AddDefs ($(lib2))
+				export
+			export
+		foreach (VAR, $(CParameters))
+			private.SUFFIXES = $(string)
+			if $(equal $(SYSNAME), Linux)
+				SUFFIXES += _lin
+				export SUFFIXES
+			if $(equal $(SYSNAME), Windows)
+				SUFFIXES += _win
+				export SUFFIXES
+			foreach (Suffix, $(SUFFIXES))
+				if $(lib.object-mem $(VAR)$(Suffix))
+					foreach (Value, $(lib.object-find $(VAR)$(Suffix)))
+						if $(not $(mem $(Value), $(getvar $(VAR))))
+							setvar ($(VAR), $(getvar $(VAR)) $(Value))
+							export
+						export
+					export
+				export
+			export
+		export
+	export
+
+CNativeSuffix =
+
+# Local Variables: 
+# mode: Makefile-GMake
+# End: 

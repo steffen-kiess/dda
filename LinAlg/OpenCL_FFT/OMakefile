@@ -1,0 +1,60 @@
+#
+# Copyright (c) 2010-2012 Steffen Kieß
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+#
+
+# Needed on non-apple platforms
+CXXFLAGS += -include limits.h -include string.h
+# Disable some warnings
+CXXFLAGS += -Wno-unused-parameter -Wno-format -Wno-conversion -Wno-newline-eof
+if $(and $(not $(equal $(CXX), llvm-g++)), $(not $(defined NO_Wmissing_declarations)))
+	CXXFLAGS += -Wno-missing-declarations # -Wno-sign-conversion
+	export
+
+clean:
+	rm -f *.o *.a *.generated.*
+	/bin/rm -rf float.generated double.generated
+
+FILES = fft_execute.cpp fft_kernelstring.cpp fft_setup.cpp clFFT.h fft_base_kernels.h fft_internal.h
+
+foreach (NAME, $(FILES))
+	float.generated/$(NAME): $(ROOT)/lib/apple-opencl-fft/$(NAME)
+		mkdir -p float.generated
+#	# Fix include for non-apple-systems, enable use on non-GPU devices
+		sed $'s,#include <OpenCL/opencl.h>,#include <CL/opencl.h>,;s/device_type == CL_DEVICE_TYPE_GPU/device_type == CL_DEVICE_TYPE_GPU || 1/' < $< > $@
+		true # Without this omake tries to rebuild the target every time
+#	# Create a double precision version of the FFT
+	double.generated/$(NAME): float.generated/$(NAME)
+		mkdir -p double.generated
+		sed $'s/float/double/g;s/FFT1D/FFTdouble1D/g;s/clFFT_/clFFTdouble_/g;s/get\(KernelWorkDimensions\|MaxKernelWorkGroupSize\|GlobalRadixInfo\)/getdouble\1/g;s/__CLFFT_H/__CLFFTDOUBLE_H/g;s/"#ifndef/"#if defined(cl_amd_fp64) \&\& !defined(cl_khr_fp64)\\n#pragma OPENCL EXTENSION cl_amd_fp64: enable\\n#else\\n#pragma OPENCL EXTENSION cl_khr_fp64: enable\\n#endif\\n#ifndef/;s/native_//g' < $< > $@
+		true # Without this omake tries to rebuild the target every time
+foreach (NAME, $(filter %.cpp, $(FILES)))
+	float.generated.$(NAME):
+		echo $""#include "float.generated/$(NAME)" "" > $@
+	double.generated.$(NAME):
+		echo $""#include "double.generated/$(NAME)" "" > $@
+
+section
+	LocalCGeneratedFiles ($(addprefix float.generated/, $(FILES)))
+	CLink (sdi+, OpenCL_FFT_float, float.generated.fft_execute float.generated.fft_kernelstring float.generated.fft_setup)
+
+section
+	LocalCGeneratedFiles ($(addprefix double.generated/, $(FILES)))
+	CLink (sdi+, OpenCL_FFT_double, double.generated.fft_execute double.generated.fft_kernelstring double.generated.fft_setup)

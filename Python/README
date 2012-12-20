@@ -1,0 +1,2 @@
+This directory contains python code for plotting the electric plane far field
+(in show-field.py) and to display the geometry (in show-geometry.py).

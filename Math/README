@@ -1,0 +1,3 @@
+This directory contains some math-related classes (e.g. for a 3D-Vector) and
+some math-related methods (i.e. for getting the absolute value of some scalar
+or vector).

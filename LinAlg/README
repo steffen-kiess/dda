@@ -1,0 +1,7 @@
+This directory contains some linear algebra functionality.
+
+- Abstract classes for 1d-FFT plans on the CPU and on the GPU and
+  implementations using FFTW / the Apple OpenCL FFT.
+
+- Code for doing linear combinations and vector reductions on the CPU and on the
+  GPU

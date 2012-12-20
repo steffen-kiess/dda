@@ -1,0 +1,4 @@
+OpenCL C++ bindings from http://www.khronos.org/registry/cl/api/1.0/cl.hpp
+
+Some modifications to avoid warnings and to use a custom exception class.
+Header without modifications is in CL/cl.hpp.orig

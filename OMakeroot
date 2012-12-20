@@ -1,0 +1,90 @@
+#
+# Copyright (c) 2010-2012 Steffen Kieß
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+#
+
+open build/Common
+
+OMAKEPATH = $(ROOT)/local $(OMAKEPATH)
+
+open OMake/Util
+include OMake/C
+include OMake/OpenCL
+
+include OMake/LibFFTW
+include OMake/LibBoost
+include OMake/LibDl
+include OMake/LibOpenCL
+
+
+if $(file-exists local/OMakeroot.local)
+	include ./local/OMakeroot.local
+	export
+
+if $(file-exists OMakeroot.local)
+	include ./OMakeroot.local
+	export
+
+# Redefine the command line variables.
+DefineCommandVars()
+
+INCLUDES += $(ROOT)
+INCLUDES += $(ROOT)/lib/utf8cpp
+SYSTEM_INCLUDES += $(ROOT)/lib/opencl-1.1-headers
+INCLUDES += $(ROOT)/lib/opencl-cpp
+OpenCLIncludes += $(ROOT)
+
+OpenCLCFlags += -cl-fast-relaxed-math
+
+CFLAGS += -g -O -pedantic -Wall -Wextra -std=c99
+
+CXXFLAGS += -g
+CXXFLAGS += $(if $(defined OPT), -O3, -O)
+CXXFLAGS += -ffast-math
+CXXFLAGS += -pedantic
+
+if $(not $(defined WARNINGS))
+	WARNINGS[] =
+	export
+if $(not $(defined REMOVE_WARNINGS))
+	REMOVE_WARNINGS[] =
+	export
+
+WARNINGS += all extra init-self missing-include-dirs undef cast-align write-strings missing-noreturn cast-qual overloaded-virtual sign-promo missing-declarations redundant-decls conversion
+#WARNINGS += float-equal effc++ old-style-cast sign-conversion
+
+WARNINGS += no-invalid-offsetof # clang 3.0 issues this warning for non-POD-types (instead of for non-standard-layout types)
+WARNINGS += no-long-long no-variadic-macros no-missing-field-initializers no-overlength-strings no-unused-but-set-variable
+WARNINGS += no-sign-conversion no-constant-logical-operand
+
+if $(not $(equal $(removeprefix g++, $(CXX)), $(CXX)))
+	REMOVE_WARNINGS += redundant-decls # http://gcc.gnu.org/bugzilla/show_bug.cgi?id=15867
+	export
+
+CXXFLAGS += $(addprefix -W, $(filter-out $(REMOVE_WARNINGS) $(addprefix no-, $(REMOVE_WARNINGS)), $(WARNINGS)))
+
+.PHONY: test
+
+# Include the OMakefile in this directory.
+.SUBDIRS: .
+
+# Local Variables: 
+# mode: Makefile-GMake
+# End: 

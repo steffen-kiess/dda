@@ -1,0 +1,79 @@
+This project is a discrete dipole approximation (DDA) implementation for
+GPUs (in particular for NVIDIA GPUs) using OpenCL.
+
+The algorithms are heavily based on ADDA <http://code.google.com/p/a-dda/>.
+
+Currently only linux i386 and amd64 is supported. In order to build a windows
+version the build system would have to be adapted.
+
+The code includes a CPU implementation which can be used with --cpu, however
+this mode is mainly intended for debugging and not particularly fast.
+
+There is some support for multi-gpu operation but this is completely untested.
+
+There also is some support for periodic targets, but no support for getting
+the far field or cross sections of periodic targets.
+
+All output files are written as HDF5 files. These HDF5 files can be read by
+matlab (with "load -mat 'file.hdf5'") or octave (with "load 'file.hdf5'").
+
+The HDF5 files can be converted to text files and the jones matrix files can be
+converted to mueller matrix files using EMSim/Hdf5Util.
+
+There are some examples in Matlab/ which show how to read / write the HDF5 files
+with matlab or octave.
+
+The electric far field at distance r (in meter) can be computed as
+E_far(r) = exp(ikr) / r * JM * E_inc
+where E_far is the electric far field Jones vector, k is the wave number, JM is
+the Jones matrix and E_inc is the incident field Jones vector or as
+I_far(r) = 1 / r^2 * MM * I_inc
+where I_far is the far field Stokes vector, MM is the Mueller matrix and I_inc
+is the incident Stokes vector.
+
+
+To compile and run the code you need:
+- omake <http://omake.metaprl.org/index.html>
+- gcc and g++ 4.5 or later (clang/clang++ 3.0 or later also should work)
+- boost <http://www.boost.org/>
+  Version 1.42 or any later version should work
+- The HDF5 libraries <http://www.hdfgroup.org/HDF5/>
+  Version 1.8.4 or any later version should work
+- FFTW <http://www.fftw.org/>
+  Version 3.2.2 or any later version should work
+  FFTW has to be build for single, double and long double precision
+- OpenCL and a OpenCL-capable GPU driver
+
+Under Debian/Ubuntu you should be able to install this (except for OpenCL) with
+sudo apt-get install gcc g++ omake libboost-all-dev libhdf5-serial-dev libfftw3-dev
+
+Compilation is started by typing
+omake
+If adda is in $PATH a list of tests can be executed by typing
+omake test
+
+
+To execute the DDA type
+DDA/DDA
+
+A list of available options can be seen with
+DDA/DDA --help
+
+
+Examples:
+
+# Compute plane far field for a sphere with a radius of 10um and a refractive
+# index of 1.5+0.1i using a wavelength of 6um:
+DDA/DDA --geometry=sphere:10um,1.5+0.1i --lambda 6um --efield
+
+# The same with a dipole distance of 0.5um:
+DDA/DDA --geometry=sphere:10um,1.5+0.1i --lambda 6um --efield --grid-unit 0.5um
+
+# Compute grid far field (theta from 0 deg to 180 deg in steps of 2 deg, phi
+# from 0 deg to 360 deg in steps of 6 deg) for a box with a size of 10x5x5um
+# and a refractive index of 1.5+0.1i with an incident beam direction of (0,1,0)
+# with lambda = 6um
+DDA/DDA --geometry='box:(10um,5um,5um),1.5+0.1i' --lambda 6um --prop '(0,1,0)' --efield
+
+# Do the same on the CPU
+DDA/DDA --geometry='box:(10um,5um,5um),1.5+0.1i' --lambda 6um --prop '(0,1,0)' --efield --cpu

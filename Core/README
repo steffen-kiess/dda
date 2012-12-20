@@ -1,0 +1,11 @@
+This directory contains utility classes and methods used by the remaining code.
+
+For example:
+- Util:
+  Preprocessor macros for C/C++
+- Exception:
+  An exception base class with stack trace generation
+- CheckedInteger:
+  An integer with overflow checks
+- IStream / OStream:
+  Reference counted input / output streams

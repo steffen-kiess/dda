@@ -1,0 +1,29 @@
+This directory contains C++ bindings for libhdf5 <http://www.hdfgroup.org/HDF5/>.
+
+The bindings are incomplete, in particular most methods for accessing atomic
+data types and all methods for accessing property lists are missing.
+
+All classes deriving from HDF5::IdComponent like HDF5::DataType, HDF5::File,
+HDF5::DataSet etc. represent a reference pointing to a HDF5 object.
+Therefore all these classes provide a copy constructor (which will create a new
+reference to the same object) and all methods are declared as const (because
+no method changes the reference, only the referred object).
+Cast e.g. from HDF5::DataType to HDF5::AtomicType will check the argument
+and throw an exception if the argument is not an atomic data type.
+The default constructor creates a null reference, which will cause an exception
+when used in most operations (except casting, which always succeeds, and
+using as a property list argument, where it means that H5P_DEFAULT will be
+passed to the method).
+All needed freeing of HDF5 objects is done automatically in the destructors.
+
+HDF5::getH5Type<T>() from Type.hpp can be used to get a HDF5 representation
+of a C++ type.
+
+Serialization.hpp contains template-based HDF5 serialization code.
+
+Matlab.hpp contains template-based HDF5 serialization code which will create
+files which can be opened by matlab (as .mat-files) or octave (as hdf5 files).
+The code can also load matlab-generated files (saved with -v7.3) or
+octave-generated files (saved with -hdf5).
+
+Test.cpp contains an example using most of the serialization functionality.

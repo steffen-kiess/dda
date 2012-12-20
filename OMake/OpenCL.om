@@ -1,0 +1,66 @@
+#
+# Copyright (c) 2010-2012 Steffen Kieß
+# 
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+# 
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+#
+
+# Rules to create wrapper .cpp/.hpp files for .cl files
+#
+# The .cpp file will contain the .cl source code (with #include directives
+# processed)
+#
+# The .hpp file will contain a C++ class with wrappers for the kernel calls
+
+OpenCLIncludes[] =
+OpenCLCFlags[] =
+OpenCLGccFlags[] = -Wall -Wextra -Wmissing-include-dirs -Werror -D__OPENCL_VERSION__ -D__OPENCL_STUB_CREATOR__
+OpenCLStubNamespace =
+
+OpenCLPrefixedIncludes = $`(addprefix -I, $(OpenCLIncludes))#`
+
+.SCANNER: scan-cl-%.cl: %.cl :value: $(digest-in-path-optional $(OpenCLIncludes), $&)
+	gcc $(OpenCLGccFlags) $(OpenCLPrefixedIncludes) -x c -MM -MT $(removesuffix .cl, $<).icl -MT $(removesuffix .cl, $<).inccl $<
+	true # Without this omake for some reason tries to redo the scanning every time (at least for some files)
+%.icl: %.cl :scanner: scan-cl-%.cl
+	gcc $(OpenCLGccFlags) $(OpenCLPrefixedIncludes) -x c -E -o $@ $<
+	true # Without this omake for some reason tries to rebuild the target every time (at least for some files)
+%.inccl: %.cl $(ROOT)/OpenCL/OpenCLProcessIncludes$(EXE) :scanner: scan-cl-%.cl
+	$(ROOT)/OpenCL/OpenCLProcessIncludes$(EXE) $< $(OpenCLPrefixedIncludes) > $@
+%.stub.hpp: %.cl %.icl $(ROOT)/OpenCL/OpenCLCreateStubHpp$(EXE)
+	rm -f $@
+	$(ROOT)/OpenCL/OpenCLCreateStubHpp$(EXE) $(if $(equal $(OpenCLStubNamespace), $(EMPTY)), $(EMPTY), $(OpenCLStubNamespace)::)$(removesuffix .stub.hpp, $@)Stub $(removesuffix .stub.hpp, $@).cl $(removesuffix .stub.hpp, $@).icl $@
+%.stub.cpp: %.inccl $(ROOT)/OpenCL/OpenCLCreateStubCpp$(EXE)
+	$(ROOT)/OpenCL/OpenCLCreateStubCpp$(EXE) $(if $(equal $(OpenCLStubNamespace), $(EMPTY)), $(EMPTY), $(OpenCLStubNamespace)::)$(removesuffix .stub.cpp, $@)Stub $(removesuffix .stub.cpp, $@).inccl $@ $(OpenCLCFlags)
+
+OpenCLSource (NAMES) =
+	OpenCLSourceDefaults[] =
+	OpenCLSourceCleanFiles[] =
+	foreach (NAME, $(NAMES))
+		LocalCGeneratedFiles ($(NAME).stub.hpp)
+		OpenCLSourceDefaults += $(NAME).stub.hpp
+		OpenCLSourceCleanFiles += $(NAME).ptx $(NAME).cubin $(NAME).decuda $(NAME).cl.generated.c $(NAME).cl.generated.cpp $(NAME).stub.hpp $(NAME).stub.cpp $(NAME).stub $(NAME).icl $(NAME).inccl $(NAME).sm_*.ptx
+		export
+        .PHONY: clean
+	clean:
+		rm -f $(OpenCLSourceCleanFiles)
+	export
+
+# Local Variables: 
+# mode: Makefile-GMake
+# End: 

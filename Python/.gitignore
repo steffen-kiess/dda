@@ -1,0 +1,5 @@
+*.pyc
+*.pyo
+
+/python.tar
+/python.tar.bz2
