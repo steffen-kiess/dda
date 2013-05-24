@@ -82,6 +82,11 @@ CXXFLAGS += $(addprefix -W, $(filter-out $(REMOVE_WARNINGS) $(addprefix no-, $(R
 
 .PHONY: test
 
+if $(file-exists /usr/include/mpi)
+	SYSTEM_INCLUDES += /usr/include/mpi # Workaround for libhdf5 bug (includes mpi.h instead of mpi/mpi.h), see http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=515579
+	export
+CXXFLAGS += -DOMPI_SKIP_MPICXX # Avoid needing openmpi symbols when libhdf5-openmpi is used
+
 # Include the OMakefile in this directory.
 .SUBDIRS: .
 

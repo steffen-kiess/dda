@@ -51,7 +51,11 @@
 #include <boost/preprocessor/repetition/enum_trailing_params.hpp>
 #include <boost/preprocessor/repetition/enum_trailing_binary_params.hpp>
 #include <boost/preprocessor/repetition/repeat.hpp>
+#include <boost/preprocessor/arithmetic/add.hpp>
 #include <boost/preprocessor/control/if.hpp>
+
+// Maximum number of parameters for *printf()
+#define CORE_OSTREAM_MAX_PRINTF_PARAMETER_COUNT 20
 #endif
 
 namespace Core {
@@ -109,7 +113,11 @@ namespace Core {
       return *this;
     }
 
-  private:
+    template <typename T>
+    static void addToFormat (boost::format& format, const T& head) {
+      format % head;
+    }
+
     static const boost::format& getValFormat0 () {
       static boost::format format ("%s = %s, ", std::locale::classic ());
       return format;
@@ -118,6 +126,11 @@ namespace Core {
       static boost::format format ("%s = %s\n", std::locale::classic ());
       return format;
     }
+    static const boost::format& getValFormatNoNl () {
+      static boost::format format ("%s = %s", std::locale::classic ());
+      return format;
+    }
+  private:
     static std::vector<std::string> splitNames (const std::string& str);
   public:
 
@@ -130,15 +143,15 @@ namespace Core {
       fprintf (getValFormat (), name, value);
     }
     template <typename T>
-    void fprintvals (const std::vector<std::string>::const_iterator& firstName, const std::vector<std::string>::const_iterator& lastName, T value) const {
+    void fprintvals (UNUSED const boost::format& format0, const boost::format& format, const std::vector<std::string>::const_iterator& firstName, const std::vector<std::string>::const_iterator& lastName, T value) const {
       ASSERT (firstName != lastName);
       ASSERT (firstName + 1 == lastName);
-      fprintf (getValFormat (), *firstName, value);
+      fprintf (format, *firstName, value);
     }
 #if HAVE_CXX11
     template <typename H, typename... T>
     void fprintfNoCopy (boost::format& format, const H& head, const T&... tail) const {
-      format % head;
+      addToFormat (format, head);
       fprintfNoCopy (format, tail...);
     }
 
@@ -179,15 +192,15 @@ namespace Core {
     }
 
     template <typename T, typename U0, typename... U>
-    void fprintvals (const std::vector<std::string>::const_iterator& firstName, const std::vector<std::string>::const_iterator& lastName, T value, U0 values0, U... values) const {
+    void fprintvals (const boost::format& format0, const boost::format& format, const std::vector<std::string>::const_iterator& firstName, const std::vector<std::string>::const_iterator& lastName, T value, U0 values0, U... values) const {
       ASSERT (firstName != lastName);
       fprintf (getValFormat0 (), *firstName, value);
-      fprintvals (firstName + 1, lastName, values0, values...);
+      fprintvals (format0, format, firstName + 1, lastName, values0, values...);
     }
     template <typename T0, typename... T>
-    void fprintvals (const std::string& names, T0 values0, T... values) const {
+    void fprintvals (const boost::format& format0, const boost::format& format, const std::string& names, T0 values0, T... values) const {
       std::vector<std::string> namesV = splitNames (names);
-      fprintvals (namesV.begin (), namesV.end (), values0, values...);
+      fprintvals (format0, format, namesV.begin (), namesV.end (), values0, values...);
     }
 #else
 #define TEMPLATE(n) BOOST_PP_IF (n, template <, public:/*To avoid warnings*/) \
@@ -196,7 +209,7 @@ namespace Core {
 #define DEFINE_OVERLOADS(n)                                             \
     template <typename H  BOOST_PP_ENUM_TRAILING_PARAMS (n, typename T)> \
     void fprintfNoCopy (boost::format& format, const H& head  BOOST_PP_ENUM_TRAILING_BINARY_PARAMS (n, const T, & v)) const { \
-      format % head;                                                    \
+      addToFormat (format, head);                                       \
       fprintfNoCopy (format  BOOST_PP_ENUM_TRAILING_PARAMS (n, v));     \
     }                                                                   \
                                                                         \
@@ -237,20 +250,19 @@ namespace Core {
     }                                                                   \
                                                                         \
     template <typename T, typename UU0  BOOST_PP_ENUM_TRAILING_PARAMS (n, typename U)> \
-    void fprintvals (const std::vector<std::string>::const_iterator& firstName, const std::vector<std::string>::const_iterator& lastName, T value, const UU0& values0  BOOST_PP_ENUM_TRAILING_BINARY_PARAMS (n, const U, & v)) const { \
+    void fprintvals (const boost::format& format0, const boost::format& format, const std::vector<std::string>::const_iterator& firstName, const std::vector<std::string>::const_iterator& lastName, T value, const UU0& values0  BOOST_PP_ENUM_TRAILING_BINARY_PARAMS (n, const U, & v)) const { \
       ASSERT (firstName != lastName);                                   \
       fprintf (getValFormat0 (), *firstName, value);                    \
-      fprintvals (firstName + 1, lastName, values0   BOOST_PP_ENUM_TRAILING_PARAMS (n, v)); \
+      fprintvals (format0, format, firstName + 1, lastName, values0   BOOST_PP_ENUM_TRAILING_PARAMS (n, v)); \
     }                                                                   \
     template <typename TT0  BOOST_PP_ENUM_TRAILING_PARAMS (n, typename T)> \
-    void fprintvals (const std::string& names, const TT0& values0  BOOST_PP_ENUM_TRAILING_BINARY_PARAMS (n, const T, & v)) const { \
+    void fprintvals (const boost::format& format0, const boost::format& format, const std::string& names, const TT0& values0  BOOST_PP_ENUM_TRAILING_BINARY_PARAMS (n, const T, & v)) const { \
       std::vector<std::string> namesV = splitNames (names);             \
-      fprintvals (namesV.begin (), namesV.end (), values0  BOOST_PP_ENUM_TRAILING_PARAMS (n, v)); \
+      fprintvals (format0, format, namesV.begin (), namesV.end (), values0  BOOST_PP_ENUM_TRAILING_PARAMS (n, v)); \
     }                                                                   \
     
 #define DEFINE_OVERLOADS2(z, i, data) DEFINE_OVERLOADS (i)
-    // Allow up to 9 parameters
-    BOOST_PP_REPEAT (10, DEFINE_OVERLOADS2, NOTHING)
+    BOOST_PP_REPEAT (BOOST_PP_ADD (CORE_OSTREAM_MAX_PRINTF_PARAMETER_COUNT, 1), DEFINE_OVERLOADS2, NOTHING)
 #undef DEFINE_OVERLOADS2
 #undef DEFINE_OVERLOADS
 #undef TEMPLATE
@@ -266,6 +278,15 @@ namespace Core {
     static OStream open (const boost::filesystem::path& path, std::ios_base::openmode mode = std::ios_base::out);
     static OStream openNull ();
   };
+
+  template <>
+  inline void OStream::addToFormat<uint8_t> (boost::format& format, const uint8_t& head) {
+    format % (uint16_t) head;
+  }
+  template <>
+  inline void OStream::addToFormat<int8_t> (boost::format& format, const int8_t& head) {
+    format % (int16_t) head;
+  }
 
 #if HAVE_CXX11
   template <typename... T>
@@ -299,8 +320,7 @@ namespace Core {
   }                                                                     \
     
 #define DEFINE_OVERLOADS2(z, i, data) DEFINE_OVERLOADS (i)
-  // Allow up to 9 parameters
-  BOOST_PP_REPEAT (10, DEFINE_OVERLOADS2, NOTHING)
+  BOOST_PP_REPEAT (BOOST_PP_ADD (CORE_OSTREAM_MAX_PRINTF_PARAMETER_COUNT, 1), DEFINE_OVERLOADS2, NOTHING)
 #undef DEFINE_OVERLOADS2
 #undef DEFINE_OVERLOADS
 #undef TEMPLATE
@@ -326,9 +346,9 @@ namespace Core {
   } while (0)
 
 #define FPRINTVAL(stream, value) (stream).fprintval (#value, value)
-#define EPRINTVAL(value) Core::OStream::getStderr ().fprintval (#value, value)
+#define EPRINTVAL(value) ::Core::OStream::getStderr ().fprintval (#value, value)
 
-#define FPRINTVALS(stream, ...) (stream).fprintvals (#__VA_ARGS__, __VA_ARGS__)
-#define EPRINTVALS(...) Core::OStream::getStderr ().fprintvals (#__VA_ARGS__, __VA_ARGS__)
+#define FPRINTVALS(stream, ...) (stream).fprintvals (::Core::OStream::getValFormat0 (), ::Core::OStream::getValFormat (), #__VA_ARGS__, __VA_ARGS__)
+#define EPRINTVALS(...) ::Core::OStream::getStderr ().fprintvals (::Core::OStream::getValFormat0 (), ::Core::OStream::getValFormat (), #__VA_ARGS__, __VA_ARGS__)
 
 #endif // !CORE_OSTREAM_HPP_INCLUDED

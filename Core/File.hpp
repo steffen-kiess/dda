@@ -49,6 +49,9 @@ namespace Core {
   void writeFile (const boost::filesystem::path& filename, const std::string& data);
   // Write data to file or to stdout if filename is "-"
   void writeFileOrStdout (const std::string& filename, const std::string& data);
+
+  // Call ::system (cmd) and throw an exception if the return value is not 0
+  void system (const std::string& cmd);
 }
 
 #endif // !CORE_FILE_HPP_INCLUDED

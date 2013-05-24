@@ -26,8 +26,6 @@
 
 #include <Math/FPTemplateInstances.hpp>
 
-#include <EMSim/CrossSection.hpp>
-
 #include <boost/lexical_cast.hpp>
 
 namespace EMSim {

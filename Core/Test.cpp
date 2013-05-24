@@ -22,6 +22,16 @@
 
 // Test Core::CheckedInteger and Core::checked_cast<>()
 
+#include <Core/Util.hpp>
+
+#if !defined (__GNUC__) || defined (__clang__) || GCC_VERSION_IS_ATLEAST (4, 6)
+#if __has_warning ("-Wunused-but-set-variable") || GCC_VERSION_IS_ATLEAST (4, 6)
+#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
+#else
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#endif
+#endif
+
 #include <Core/CheckedIntegerAlias.hpp>
 #include <Core/Time.hpp>
 #include <Core/OStream.hpp>

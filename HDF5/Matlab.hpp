@@ -47,6 +47,7 @@
 #include <boost/make_shared.hpp>
 #include <boost/filesystem/path.hpp>
 #include <boost/any.hpp>
+#include <boost/optional.hpp>
 
 #include <set>
 #include <map>
@@ -144,9 +145,12 @@ namespace HDF5 {
     return MatlabTypeImpl<T>::getFile ();
   }
 
+  template <typename T> struct MatlabSerializer;
+
   namespace Intern {
     MY_BOOST_DEFINE_HAS_MEMBER_CALLED (h5MatlabSave);
     MY_BOOST_DEFINE_HAS_MEMBER_CALLED (h5MatlabLoad);
+    MY_BOOST_DEFINE_HAS_MEMBER_CALLED (h5MatlabLoadNull);
 
     template <typename T, bool hasMatlabLoadSave> struct MatlabSerializerIntern;
 
@@ -163,9 +167,20 @@ namespace HDF5 {
         T::h5MatlabLoad (handle);
       }
     };
+
+    template <typename T, bool hasMatlabLoadCanHandleNull> struct MatlabSerializerIntern2;
+    template <typename T> struct MatlabSerializerIntern2<T, false> {
+      static inline boost::shared_ptr<T> h5MatlabLoadNull (UNUSED const MatlabDeserializationContext& context) {
+        return boost::shared_ptr<T> ();
+      }
+    };
+    template <typename T> struct MatlabSerializerIntern2<T, true> {
+      static inline boost::shared_ptr<T> h5MatlabLoadNull (const MatlabDeserializationContext& context) {
+        return MatlabSerializer<T>::h5MatlabLoadNull (context);
+      }
+    };
   }
 
-  template <typename T> struct MatlabSerializer;
   template <typename T> struct MatlabSerializer {
     static inline void h5MatlabSave (const MatlabSerializationContextHandle& handle, const T& t) {
       Intern::MatlabSerializerIntern<T, Intern::has_member_called_h5MatlabSave<T>::value>::h5MatlabSave (handle, t);
@@ -268,9 +283,9 @@ namespace HDF5 {
 
   class MatlabDeserializationContext {
     const HDF5::File file_;
-    std::set<ObjectReference> inProgress;
-    std::set<ObjectReference> inProgress2;
-    std::map<ObjectReference, boost::any> objects;
+    std::set<DeserializationKey> inProgress;
+    std::set<DeserializationKey> inProgress2;
+    std::map<DeserializationKey, boost::any> objects;
 
   public:
     MatlabDeserializationContext (const HDF5::File& file);
@@ -282,28 +297,30 @@ namespace HDF5 {
 
     template <typename T>
     void registerValue (ObjectReference name, boost::shared_ptr<T> ptr) {
-      ASSERT (!objects.count (name));
-      ASSERT (inProgress.count (name));
-      ASSERT (inProgress2.count (name));
-      objects[name] = boost::any (ptr);
-      inProgress.erase (name);
+      DeserializationKey key = DeserializationKey::create<T> (name);
+      ASSERT (!objects.count (key));
+      ASSERT (inProgress.count (key));
+      ASSERT (inProgress2.count (key));
+      objects[key] = boost::any (ptr);
+      inProgress.erase (key);
     }
 
     template <typename T>
     boost::shared_ptr<T> resolve (ObjectReference name) {
       if (name.isNull ())
-        return boost::shared_ptr<T> ();
-      if (objects.count (name))
-        return boost::any_cast<boost::shared_ptr<T> > (objects[name]);
-      ASSERT (!inProgress.count (name));
-      ASSERT (!inProgress2.count (name));
-      inProgress.insert (name);
-      inProgress2.insert (name);
+        return Intern::MatlabSerializerIntern2<T, Intern::has_member_called_h5MatlabLoadNull<MatlabSerializer<T> >::value>::h5MatlabLoadNull (*this);
+      DeserializationKey key = DeserializationKey::create<T> (name);
+      if (objects.count (key))
+        return boost::any_cast<boost::shared_ptr<T> > (objects[key]);
+      ASSERT (!inProgress.count (key));
+      ASSERT (!inProgress2.count (key));
+      inProgress.insert (key);
+      inProgress2.insert (key);
       MatlabSerializer<T>::h5MatlabLoad (MatlabDeserializationContextHandle<T> (*this, name));
-      ASSERT (!inProgress.count (name));
-      ASSERT (inProgress2.count (name));
-      inProgress2.erase (name);
-      return boost::any_cast<boost::shared_ptr<T> > (objects[name]);
+      ASSERT (!inProgress.count (key));
+      ASSERT (inProgress2.count (key));
+      inProgress2.erase (key);
+      return boost::any_cast<boost::shared_ptr<T> > (objects[key]);
     }
 
     template <typename T>
@@ -313,11 +330,12 @@ namespace HDF5 {
     }
 
     template <typename T>
-    const T& resolveValue (ObjectReference name) {
-      ASSERT (!name.isNull ());
-      const T& ret = *resolve<T> (name);
-      ASSERT (!inProgress2.count (name));
-      return ret;
+    const T& resolveValue (ObjectReference name, const char* memberName = NULL) {
+      DeserializationKey key = DeserializationKey::create<T> (name);
+      boost::shared_ptr<T> ptr = resolve<T> (name);
+      ASSERT_MSG (ptr, "Got null reference / missing value during deserialization" + (memberName ? std::string (" for member name `") + memberName + "'" : ""));
+      ASSERT (!inProgress2.count (key));
+      return *ptr;
     } 
 
     template <typename T>
@@ -732,6 +750,24 @@ namespace HDF5 {
     }
   };
 
+  template <typename T> struct MatlabSerializer<boost::optional<T> > {
+    static inline void h5MatlabSave (const MatlabSerializationContextHandle& handle, const boost::optional<T>& value) {
+      if (value)
+        MatlabSerializer<T>::h5MatlabSave (handle, *value);
+      else
+        handle.addEmpty ();
+    }
+    static inline boost::shared_ptr<boost::optional<T> > h5MatlabLoadNull (UNUSED const MatlabDeserializationContext& context) {
+      return boost::make_shared<boost::optional<T> > ();
+    }
+    static inline void h5MatlabLoad (const MatlabDeserializationContextHandle<boost::optional<T> >& handle) {
+      ASSERT (!handle.key ().isNull ());
+      boost::shared_ptr<boost::optional<T> > ptr = boost::make_shared<boost::optional<T> > ();
+      handle.registerValue (ptr);
+      *ptr = handle.context ().template resolveValue<T> (handle.key ());
+    }
+  };
+
 #define DEF2(ctype, filetype, matlab)           \
   template <> struct MatlabTypeImpl<ctype> {    \
     static HDF5::DataType getMemory () {        \
@@ -775,12 +811,12 @@ namespace HDF5 {
 
   namespace Intern {
     template <typename T>
-    inline void store (T& ref, MatlabDeserializationContext& context, ObjectReference name) {
-      ref = context.resolveValue<T> (name);
+    inline void loadToVar (T& ref, MatlabDeserializationContext& context, ObjectReference name, const char* memberName) {
+      ref = context.resolveValue<T> (name, memberName);
     }
 
     template <typename T>
-    inline void store (boost::shared_ptr<T>& ref, MatlabDeserializationContext& context, ObjectReference name) {
+    inline void loadToVar (boost::shared_ptr<T>& ref, MatlabDeserializationContext& context, ObjectReference name, UNUSED const char* memberName) {
       ref = context.resolve<T> (name);
     }
   }
@@ -803,7 +839,7 @@ public:                                                                 \
 
 #define HDF5_MATLAB2_ADD_MEMBER_NAME(member, name)                      \
   /*::Core::OStream::getStderr () << "Loading " << (name) << std::endl;*/ \
-  ::HDF5::Intern::store (value->member, handle.context (), mo.group ().getReferenceIfExists (name));
+  ::HDF5::Intern::loadToVar (value->member, handle.context (), mo.group ().getReferenceIfExists (name), name);
 #define HDF5_MATLAB2_ADD_MEMBER(member) HDF5_MATLAB2_ADD_MEMBER_NAME (member, #member)
 #define HDF5_MATLAB2_TYPE(name)                                         \
   public:                                                               \

@@ -71,4 +71,10 @@ private:                                        \
 
 #endif // HAVE_CXX11
 
+#ifdef __CUDACC__
+#define NVCC_HOST_DEVICE __host__ __device__
+#else
+#define NVCC_HOST_DEVICE
+#endif
+
 #endif // !CORE_UTIL_HPP_INCLUDED

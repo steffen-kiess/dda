@@ -58,6 +58,7 @@ namespace HDF5 {
   }                                                                     \
                                                                         \
   static ClassName create () {                                          \
+    Exception::check ("H5open", H5open ());                             \
     return (ClassName) PropList::create (cls);                          \
   }                                                                     \
   };

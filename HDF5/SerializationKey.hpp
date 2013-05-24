@@ -25,6 +25,8 @@
 
 // Serialization key used by Serialization.hpp and Matlab.hpp
 
+#include <HDF5/BaseTypes.hpp>
+
 #include <typeinfo>
 
 namespace HDF5 {
@@ -49,6 +51,27 @@ namespace HDF5 {
         return false;
       else
         return ptr_ < other.ptr_;
+    }
+  };
+
+  class DeserializationKey {
+    const std::type_info* type_;
+    ObjectReference ref_;
+
+  public:
+    DeserializationKey (const std::type_info* type, ObjectReference ref) : type_ (type), ref_ (ref) {}
+
+    template <typename T> static DeserializationKey create (ObjectReference ref) {
+      return DeserializationKey (&typeid (T), ref);
+    }
+
+    bool operator< (const DeserializationKey& other) const {
+      if (type_ < other.type_)
+        return true;
+      else if (type_ > other.type_)
+        return false;
+      else
+        return ref_ < other.ref_;
     }
   };
 }

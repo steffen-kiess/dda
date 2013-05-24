@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2012 Steffen Kieß
+ * Copyright (c) 2010-2013 Steffen Kieß
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -20,28 +20,28 @@
  * THE SOFTWARE.
  */
 
-#include <Core/OStream.hpp>
-#include <Core/StringUtil.hpp>
+#include "UnixFile.hpp"
 
-#include <cstring>
+#if OS_UNIX
 
-int main () {
-  Core::OStream out = Core::OStream::getStdout ();
+#include <Core/Error.hpp>
+#include <Core/BoostFilesystem.hpp>
 
-  out << "foo" << std::endl;
-  FPRINTVAL (out, "foo");
-  out.fprintf ("%s %s\n", 4, "Q");
-  std::vector<std::string> v = Core::split ("asd,k", ",");
-  out.fprintvals (::Core::OStream::getValFormat0 (), ::Core::OStream::getValFormat (), "asd, k", "ASD", 4);
-#define A "x"
-  EPRINTVALS (3);
-  EPRINTVALS (3, "2qwe");
-  EPRINTVALS (3, "2qwe", A);
+namespace Core {
+  UnixFile::Shared::~Shared () {
+    if (fd != -1) {
+      Core::Error::check ("close", close (fd));
+      fd = -1;
+    }
+  }
 
-  EPRINTVALS ("\"foo, bar");
-  EPRINTVALS (strlen ("foo, bar"));
-  EPRINTVALS ('(', 'a');
-  EPRINTVALS ('x', ',');
+  int UnixFile::dup () const {
+    return Core::Error::check ("dup", ::dup (fd ()));
+  }
 
-  return 0;
+  UnixFile UnixFile::open (const boost::filesystem::path& path, int flags, mode_t mode) {
+    return UnixFile (Core::Error::check ("open", ::open (path.BOOST_FILE_STRING.c_str (), flags, mode)));
+  }
 }
+
+#endif // OS_UNIX

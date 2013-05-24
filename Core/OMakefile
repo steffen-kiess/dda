@@ -27,7 +27,7 @@ section
 		OStream StringUtil IStream File WindowsError Memory \
 		Allocator BoostFilesystem CheckedInteger ParsingUtil \
 		NumericException ProgressBar HelpResultException \
-		CheckedIntegerAlias)
+		CheckedIntegerAlias UnixFile)
 
 LIBS += Core
 

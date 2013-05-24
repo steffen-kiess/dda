@@ -404,6 +404,12 @@ namespace Core {
 
 #if defined (__amd64__) || defined (__i386__)
 
+#ifndef __CUDACC__
+#define CLOBBER_CC "cc"
+#else
+#define CLOBBER_CC
+#endif
+
 #define DEF_OP(ty, fc, op)                                              \
   template <> inline ty CheckedInteger<ty>::checked_##op (ty a, ty b) { \
     ty out;                                                             \
@@ -412,7 +418,7 @@ namespace Core {
          #fc " %1\n\t"                                                  \
          : "=q" (out), "=q" (of)                                        \
          : "0" (a), "q" (b)                                             \
-         : "cc"                                                         \
+         : CLOBBER_CC                                                   \
          );                                                             \
     if (of)                                                             \
       Intern::overflow<ty, CheckedIntegerOperations::op> (a, b);        \
@@ -470,7 +476,7 @@ namespace Core {
          : "=&A" (out), "=q" (of)                                       \
            /*: "0" (a), "R" ((uint32_t) (uint64_t) b), "R" ((uint32_t) (((uint64_t) b) >> 32))*/ \
          : "0" (a), "g" ((uint32_t) (uint64_t) b), "g" ((uint32_t) (((uint64_t) b) >> 32)) \
-         : "cc"                                                         \
+         : CLOBBER_CC                                                   \
          );                                                             \
     if (of)                                                             \
       Intern::overflow<ty, CheckedIntegerOperations::op> (a, b);        \
@@ -488,7 +494,7 @@ namespace Core {
     asm ("mul %3"
          : "=a" (out), "=d" (hi)
          : "a" (a), "q" (b)
-         : "cc"
+         : CLOBBER_CC
          );
     if (hi)
       Intern::overflow<uint64_t, CheckedIntegerOperations::mul> (a, b);
@@ -500,15 +506,18 @@ namespace Core {
     asm ("imul %3"
          : "=a" (out), "=d" (hi)
          : "a" (a), "q" (b)
-         : "cc"
+         : CLOBBER_CC
          );
     if (out < 0 ? (hi != -1) : (hi != 0))
       Intern::overflow<int64_t, CheckedIntegerOperations::mul> (a, b);
     return out;
   }
 #endif
-}
+
+#undef CLOBBER_CC
 
 #endif
+
+}
 
 #endif // !CORE_CHECKEDINTEGER_HPP_INCLUDED

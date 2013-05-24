@@ -20,7 +20,7 @@
 # THE SOFTWARE.
 #
 
-LIBS += $(ROOT)/Core/Core
+LIBS += ../Core/Core
 
 section
 	AddDefs ($(LibBoost.Filesystem))

@@ -101,4 +101,28 @@ namespace Core {
     else
       writeFile (filename, data);
   }
+
+  class SystemCommandException : public Exception {
+    int status_;
+    const std::string command_;
+
+  public:
+    SystemCommandException (int status, const std::string& command) : status_ (status), command_ (command) {
+    }
+    virtual ~SystemCommandException () throw () {
+    }
+
+    int status () const { return status_; }
+    const std::string& command () const { return command_; }
+
+    virtual std::string message () const {
+      return Core::sprintf ("Execution of command '%s' returned value %d", command (), status ());
+    }
+  };
+
+  void system (const std::string& cmd) {
+    int status = Core::Error::check ("system", ::system (cmd.c_str ()));
+    if (status != 0)
+      throw SystemCommandException (status, cmd);
+  }
 }

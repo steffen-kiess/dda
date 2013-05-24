@@ -189,10 +189,10 @@ namespace Math {
 
   // Unary +/-
   template <typename T> inline DiagMatrix3<T> operator+ (DiagMatrix3<T> v) {
-    return DiagMatrix3<T> (+v.m11 (), +v.m12 (), +v.m13 ());
+    return DiagMatrix3<T> (+v.m11 (), +v.m22 (), +v.m33 ());
   }
   template <typename T> inline DiagMatrix3<T> operator- (DiagMatrix3<T> v) {
-    return DiagMatrix3<T> (-v.m11 (), -v.m12 (), -v.m13 ());
+    return DiagMatrix3<T> (-v.m11 (), -v.m22 (), -v.m33 ());
   }
 
   template <typename F> DiagMatrix3<F> real (DiagMatrix3<std::complex<F> > v) {

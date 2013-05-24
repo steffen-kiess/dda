@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2012 Steffen Kieß
+ * Copyright (c) 2010-2013 Steffen Kieß
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -20,28 +20,46 @@
  * THE SOFTWARE.
  */
 
-#include <Core/OStream.hpp>
-#include <Core/StringUtil.hpp>
+#ifndef CORE_UNIXFILE_HPP_INCLUDED
+#define CORE_UNIXFILE_HPP_INCLUDED
 
-#include <cstring>
+#include <Core/Util.hpp>
 
-int main () {
-  Core::OStream out = Core::OStream::getStdout ();
+#if OS_UNIX
 
-  out << "foo" << std::endl;
-  FPRINTVAL (out, "foo");
-  out.fprintf ("%s %s\n", 4, "Q");
-  std::vector<std::string> v = Core::split ("asd,k", ",");
-  out.fprintvals (::Core::OStream::getValFormat0 (), ::Core::OStream::getValFormat (), "asd, k", "ASD", 4);
-#define A "x"
-  EPRINTVALS (3);
-  EPRINTVALS (3, "2qwe");
-  EPRINTVALS (3, "2qwe", A);
+#include <Core/Assert.hpp>
 
-  EPRINTVALS ("\"foo, bar");
-  EPRINTVALS (strlen ("foo, bar"));
-  EPRINTVALS ('(', 'a');
-  EPRINTVALS ('x', ',');
+#include <boost/filesystem/path.hpp>
+#include <boost/shared_ptr.hpp>
 
-  return 0;
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
+namespace Core {
+  class UnixFile {
+    struct Shared {
+      int fd;
+      Shared (int fd) : fd (fd) {}
+      ~Shared ();
+    };
+    boost::shared_ptr<Shared> shared;
+
+  public:
+    UnixFile () : shared () {}
+    explicit UnixFile (int fd) : shared (new Shared (fd)) {}
+
+    int fd () const {
+      ASSERT (shared);
+      return shared->fd;
+    }
+
+    int dup () const;
+
+    static UnixFile open (const boost::filesystem::path& path, int flags, mode_t mode = 0);
+  };
 }
+
+#endif // OS_UNIX
+
+#endif // !CORE_UNIXFILE_HPP_INCLUDED

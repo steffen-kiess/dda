@@ -54,7 +54,8 @@ namespace Core {
       return double (getMicroseconds ()) / 1000.0;
     }
 
-    std::string toString () const;
+    std::string toString (bool appendUnit = true) const;
+    static TimeSpan parse (const std::string& str, bool appendUnit = true);
 
     TimeSpan operator +(TimeSpan o) {
       return TimeSpan (getMicroseconds () + o.getMicroseconds ());
@@ -63,6 +64,15 @@ namespace Core {
     TimeSpan operator -(TimeSpan o) {
       return TimeSpan (getMicroseconds () - o.getMicroseconds ());
     }
+
+#define FORWARD_BOOL_OP(op)                                     \
+    bool operator op (TimeSpan o) const {                       \
+      return getMicroseconds () op o.getMicroseconds ();        \
+    }
+    FORWARD_BOOL_OP (<) FORWARD_BOOL_OP (<=)
+    FORWARD_BOOL_OP (>) FORWARD_BOOL_OP (>=)
+    FORWARD_BOOL_OP (==) FORWARD_BOOL_OP (!=)
+#undef FORWARD_BOOL_OP
   };
 
   static inline TimeSpan operator *(TimeSpan t1, int s) {

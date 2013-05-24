@@ -22,10 +22,13 @@
 
 #include "TimeSpan.hpp"
 
+#include <Core/Assert.hpp>
+#include <Core/StringUtil.hpp>
+
 #include <sstream>
 
 namespace Core {
-  std::string TimeSpan::toString () const {
+  std::string TimeSpan::toString (bool appendUnit) const {
     std::stringstream str;
     
     str.setf (std::ios_base::internal, std::ios_base::adjustfield);
@@ -33,8 +36,27 @@ namespace Core {
     str.setf (std::ios_base::showpoint);
     //str.width (10);
     str.precision (6);
-    str << getSeconds () << "s";
+    str << getSeconds ();
+    if (appendUnit)
+      str << "s";
     
     return str.str ();
+  }
+
+  TimeSpan TimeSpan::parse (const std::string& str, bool appendUnit) {
+    std::string s = str;
+
+    if (appendUnit) {
+      ASSERT (str.length () > 0 && str[str.length () - 1] == 's');
+      s = s.substr (0, str.length () - 1);
+    }
+
+    std::stringstream stream (s);
+    double seconds;
+    stream >> seconds;
+    ASSERT (!stream.bad ());
+    ASSERT (stream.eof ());
+
+    return TimeSpan::fromSeconds (seconds);
   }
 }

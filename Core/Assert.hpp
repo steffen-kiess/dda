@@ -39,17 +39,19 @@ namespace Core {
     NORETURN assertionFailure (const char* file, int line, const char* condition, const std::string& additionalMessage = "");
   }
 
-#define ASSERT(condition) do {                                          \
+#define ASSERT_STR(condition, conditionStr) do {                        \
     if (!(condition)) {                                                 \
-      ::Core::Intern::assertionFailure (__FILE__, __LINE__, #condition); \
+      ::Core::Intern::assertionFailure (__FILE__, __LINE__, conditionStr); \
     }                                                                   \
   } while (0)
+#define ASSERT(condition) ASSERT_STR (condition, #condition)
 
-#define ASSERT_MSG(condition, additionalMessage) do {                   \
+#define ASSERT_STR_MSG(condition, conditionStr, additionalMessage) do { \
     if (!(condition)) {                                                 \
-      ::Core::Intern::assertionFailure (__FILE__, __LINE__, #condition, additionalMessage); \
+      ::Core::Intern::assertionFailure (__FILE__, __LINE__, conditionStr, additionalMessage); \
     }                                                                   \
   } while (0)
+#define ASSERT_MSG(condition, additionalMessage) ASSERT_STR_MSG (condition, #condition, additionalMessage)
 
 #define ABORT() do {                                                    \
     ::Core::Intern::assertionFailure (__FILE__, __LINE__, NULL);     \
