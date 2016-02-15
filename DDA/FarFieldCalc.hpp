@@ -26,6 +26,7 @@
 // Code for calculating the far field and storing the result
 
 #include <Core/OStream.hpp>
+#include <Core/BoostFilesystem.hpp>
 
 #include <Math/FPTemplateInstances.hpp>
 

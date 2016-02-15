@@ -29,6 +29,7 @@
 
 #include <stdint.h>
 #include <string>
+#include <ostream>
 
 namespace Core {
   class TimeSpan {
@@ -109,6 +110,11 @@ namespace Core {
 
   static inline TimeSpan operator /(TimeSpan t1, float s) {
     return TimeSpan (static_cast<int64_t> (static_cast<double> (t1.getMicroseconds ()) / s));
+  }
+
+  static inline std::ostream& operator<< (std::ostream& stream, TimeSpan t) {
+    stream << t.toString ();
+    return stream;
   }
 }
 

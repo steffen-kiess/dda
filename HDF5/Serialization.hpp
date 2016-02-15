@@ -45,8 +45,6 @@
 #include <boost/filesystem/path.hpp>
 #include <boost/any.hpp>
 
-#include <Core/BoostFilesystem.hpp>
-
 namespace HDF5 {
   template <typename T> struct Serializer;
   template <typename T> struct Serializer {

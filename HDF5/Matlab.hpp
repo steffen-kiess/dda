@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010-2012 Steffen Kieß
+ * Copyright (c) 2010-2013 Steffen Kieß
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -27,11 +27,6 @@
 
 #include <Core/Util.hpp>
 #include <Core/Assert.hpp>
-#include <Core/BoostFilesystem.hpp>
-
-#include <Math/Vector3.hpp>
-#include <Math/DiagMatrix3.hpp>
-#include <Math/Quaternion.hpp>
 
 #include <HDF5/BaseTypes.hpp>
 #include <HDF5/Type.hpp>
@@ -48,6 +43,7 @@
 #include <boost/filesystem/path.hpp>
 #include <boost/any.hpp>
 #include <boost/optional.hpp>
+#include <boost/utility/in_place_factory.hpp>
 
 #include <set>
 #include <map>
@@ -136,6 +132,30 @@ namespace HDF5 {
     Object get () const;
   };
 
+  template <typename T>
+  class MatlabDeserializationContextHandleDirect {
+    MatlabDeserializationContext& context_;
+    ObjectReference key_;
+    T& ref_;
+
+  public:
+    MatlabDeserializationContextHandleDirect (MatlabDeserializationContext& context, ObjectReference key, T& ref) : context_ (context), key_ (key), ref_ (ref) {}
+
+    MatlabDeserializationContext& context () const {
+      return context_;
+    }
+
+    const ObjectReference& key () const {
+      return key_;
+    }
+
+    Object get () const;
+
+    T& ref () const {
+      return ref_;
+    }
+  };
+
   template <typename T> struct MatlabTypeImpl {};
 
   template <typename T> inline HDF5::DataType getMatlabH5MemoryType () {
@@ -151,6 +171,8 @@ namespace HDF5 {
     MY_BOOST_DEFINE_HAS_MEMBER_CALLED (h5MatlabSave);
     MY_BOOST_DEFINE_HAS_MEMBER_CALLED (h5MatlabLoad);
     MY_BOOST_DEFINE_HAS_MEMBER_CALLED (h5MatlabLoadNull);
+    MY_BOOST_DEFINE_HAS_MEMBER_CALLED (h5MatlabLoadDirect);
+    MY_BOOST_DEFINE_HAS_MEMBER_CALLED (h5MatlabLoadNullDirect);
 
     template <typename T, bool hasMatlabLoadSave> struct MatlabSerializerIntern;
 
@@ -166,17 +188,27 @@ namespace HDF5 {
       static inline void h5MatlabLoad (const MatlabDeserializationContextHandle<T>& handle) {
         T::h5MatlabLoad (handle);
       }
+
+      static inline void h5MatlabLoadDirect (const MatlabDeserializationContextHandleDirect<T>& handle) {
+        T::h5MatlabLoadDirect (handle);
+      }
     };
 
     template <typename T, bool hasMatlabLoadCanHandleNull> struct MatlabSerializerIntern2;
-    template <typename T> struct MatlabSerializerIntern2<T, false> {
-      static inline boost::shared_ptr<T> h5MatlabLoadNull (UNUSED const MatlabDeserializationContext& context) {
-        return boost::shared_ptr<T> ();
+
+    template <typename T, bool hasMatlabLoadDirect> struct MatlabSerializerIntern3;
+
+    template <typename T, bool hasMatlabLoad> struct MatlabSerializerIntern4;
+    template <typename T> struct MatlabSerializerIntern4<T, false> {
+      static inline void h5MatlabLoad (const MatlabDeserializationContextHandle<T>& handle) {
+        boost::shared_ptr<T> ptr = boost::make_shared<T> ();
+        handle.registerValue (ptr);
+        MatlabSerializer<T>::h5MatlabLoadDirect (MatlabDeserializationContextHandleDirect<T> (handle.context (), handle.key (), *ptr));
       }
     };
-    template <typename T> struct MatlabSerializerIntern2<T, true> {
-      static inline boost::shared_ptr<T> h5MatlabLoadNull (const MatlabDeserializationContext& context) {
-        return MatlabSerializer<T>::h5MatlabLoadNull (context);
+    template <typename T> struct MatlabSerializerIntern4<T, true> {
+      static inline void h5MatlabLoad (const MatlabDeserializationContextHandle<T>& handle) {
+        MatlabSerializer<T>::h5MatlabLoad (handle);
       }
     };
   }
@@ -316,7 +348,8 @@ namespace HDF5 {
       ASSERT (!inProgress2.count (key));
       inProgress.insert (key);
       inProgress2.insert (key);
-      MatlabSerializer<T>::h5MatlabLoad (MatlabDeserializationContextHandle<T> (*this, name));
+      //MatlabSerializer<T>::h5MatlabLoad (MatlabDeserializationContextHandle<T> (*this, name));
+      Intern::MatlabSerializerIntern4<T, Intern::has_member_called_h5MatlabLoad<MatlabSerializer<T> >::value>::h5MatlabLoad (MatlabDeserializationContextHandle<T> (*this, name));
       ASSERT (!inProgress.count (key));
       ASSERT (inProgress2.count (key));
       inProgress2.erase (key);
@@ -343,6 +376,17 @@ namespace HDF5 {
       ASSERT (obj.file () == file ());
       return resolveValue<T> (obj.reference ());
     }
+
+    template <typename T>
+    void resolveValueDirect (T& ref, ObjectReference name, const char* memberName = NULL) {
+      Intern::MatlabSerializerIntern3<T, Intern::has_member_called_h5MatlabLoadDirect<MatlabSerializer<T> >::value>::h5MatlabLoadDirect (MatlabDeserializationContextHandleDirect<T> (*this, name, ref), memberName);
+    } 
+
+    template <typename T>
+    void resolveValueDirect (T& ref, const HDF5::Object& obj) {
+      ASSERT (obj.file () == file ());
+      resolveValueDirect<T> (ref, obj.reference ());
+    }
   };
 
   template <typename T>
@@ -352,6 +396,11 @@ namespace HDF5 {
 
   template <typename T>
   inline Object MatlabDeserializationContextHandle<T>::get () const {
+    return key ().dereference (context ().file ());
+  }
+
+  template <typename T>
+  inline Object MatlabDeserializationContextHandleDirect<T>::get () const {
     return key ().dereference (context ().file ());
   }
 
@@ -463,6 +512,7 @@ namespace HDF5 {
     file.rootGroup ().link (name, obj);
   }
   template <typename T> inline void matlabSerialize (const boost::filesystem::path& outputFile, const std::string& name, const T& object) {
+    // TODO: create .new file + rename?
     HDF5::File file = createMatlabFile (outputFile);
     matlabSerialize (file, name, object);
   }
@@ -475,6 +525,7 @@ namespace HDF5 {
     matlabSerialize (file.rootGroup (), object);
   }
   template <typename T> inline void matlabSerialize (const boost::filesystem::path& outputFile, const T& object) {
+    // TODO: create .new file + rename?
     HDF5::File file = createMatlabFile (outputFile);
     matlabSerialize (file, object);
   }
@@ -518,11 +569,62 @@ namespace HDF5 {
         writeAttribute (dataSet, "MATLAB_class", MatlabTypeImpl<T>::matlabClass ());
         dataSet.write (&t, memType, dataSpace);
       }
+      // TODO: avoid this overload (and use the MatlabSerializerIntern4::h5MatlabLoad() method)?
       static inline void h5MatlabLoad (const MatlabDeserializationContextHandle<T>& handle) {
         MatlabObject mo (handle.get ());
         boost::shared_ptr<T> ptr = boost::make_shared<T> ();
         handle.registerValue (ptr);
         mo.getScalar (*ptr);
+      }
+      static inline void h5MatlabLoadDirect (const MatlabDeserializationContextHandleDirect<T>& handle) {
+        MatlabObject mo (handle.get ());
+        mo.getScalar (handle.ref ());
+      }
+    };
+
+    template <typename T, bool hasMatlabLoadNullDirect> struct MatlabSerializerIntern5;
+    template <typename T> struct MatlabSerializerIntern5<T, false> {
+      static inline void h5MatlabLoadNullDirect (UNUSED MatlabDeserializationContext& context, UNUSED T& ref, const char* memberName) {
+        ABORT_MSG ("Got null reference / missing value during deserialization" + (memberName ? std::string (" for member name `") + memberName + "'" : ""));
+      }
+      static inline boost::shared_ptr<T> h5MatlabLoadNull (UNUSED MatlabDeserializationContext& context) {
+        return boost::shared_ptr<T> ();
+      }
+    };
+    template <typename T> struct MatlabSerializerIntern5<T, true> {
+      static inline void h5MatlabLoadNullDirect (MatlabDeserializationContext& context, T& ref, UNUSED const char* memberName) {
+        MatlabSerializer<T>::h5MatlabLoadNullDirect (context, ref);
+      }
+      static inline boost::shared_ptr<T> h5MatlabLoadNull (MatlabDeserializationContext& context) {
+        boost::shared_ptr<T> ptr = boost::make_shared<T> ();
+        MatlabSerializer<T>::h5MatlabLoadNullDirect (context, *ptr);
+        return ptr;
+      }
+    };
+
+    template <typename T> struct MatlabSerializerIntern2<T, false> {
+      static inline boost::shared_ptr<T> h5MatlabLoadNull (MatlabDeserializationContext& context) {
+        //return boost::shared_ptr<T> ();
+        return Intern::MatlabSerializerIntern5<T, Intern::has_member_called_h5MatlabLoadNullDirect<MatlabSerializer<T> >::value>::h5MatlabLoadNull (context);
+      }
+    };
+    template <typename T> struct MatlabSerializerIntern2<T, true> {
+      static inline boost::shared_ptr<T> h5MatlabLoadNull (MatlabDeserializationContext& context) {
+        return MatlabSerializer<T>::h5MatlabLoadNull (context);
+      }
+    };
+
+    template <typename T> struct MatlabSerializerIntern3<T, false> {
+      static inline void h5MatlabLoadDirect (const MatlabDeserializationContextHandleDirect<T>& handle, const char* memberName) {
+        handle.ref () = handle.context ().template resolveValue<T> (handle.key (), memberName);
+      }
+    };
+    template <typename T> struct MatlabSerializerIntern3<T, true> {
+      static inline void h5MatlabLoadDirect (const MatlabDeserializationContextHandleDirect<T>& handle, const char* memberName) {
+        if (handle.key ().isNull ())
+          Intern::MatlabSerializerIntern5<T, Intern::has_member_called_h5MatlabLoadNullDirect<MatlabSerializer<T> >::value>::h5MatlabLoadNullDirect (handle.context (), handle.ref (), memberName);
+        else
+          MatlabSerializer<T>::h5MatlabLoadDirect (handle);
       }
     };
   }
@@ -543,176 +645,9 @@ namespace HDF5 {
         // pass in dataSpace as fileSpace to avoid problems when v.data () is NULL (causes "no output buffer" error)
         dataSet.write (v.data (), memType, dataSpace, dataSpace);
     }
-    static inline void h5MatlabLoad (const MatlabDeserializationContextHandle<std::vector<T> >& handle) {
+    static inline void h5MatlabLoadDirect (const MatlabDeserializationContextHandleDirect<std::vector<T> >& handle) {
       MatlabObject mo (handle.get ());
-      boost::shared_ptr<std::vector<T> > ptr = boost::make_shared<std::vector<T> > ();
-      handle.registerValue (ptr);
-      mo.get1dStdVector (*ptr);
-    }
-  };
-
-  template <typename T> struct MatlabSerializer<Math::Vector3<T> > {
-    static inline void h5MatlabSave (const MatlabSerializationContextHandle& handle, const Math::Vector3<T>& v) {
-      HDF5::DataSpace dataSpace = HDF5::DataSpace::createSimple (3);
-      HDF5::DataType memType = getMatlabH5MemoryType<T> ();
-      HDF5::DataType fileType = getMatlabH5FileType<T> ();
-      HDF5::DataSet dataSet = handle.createDataSet (fileType, dataSpace);
-      writeAttribute (dataSet, "MATLAB_class", MatlabTypeImpl<T>::matlabClass ());
-      dataSet.write (&v.x (), memType, dataSpace);
-    }
-    static inline void h5MatlabLoad (const MatlabDeserializationContextHandle<Math::Vector3<T> >& handle) {
-      MatlabObject mo (handle.get ());
-      boost::shared_ptr<Math::Vector3<T> > ptr = boost::make_shared<Math::Vector3<T> > ();
-      handle.registerValue (ptr);
-      mo.get1dValues (&ptr->x (), 3);
-    }
-  };
-
-  template <typename T> struct MatlabSerializer<std::vector<Math::Vector3<T> > > {
-    static inline void h5MatlabSave (const MatlabSerializationContextHandle& handle, const std::vector<Math::Vector3<T> >& v) {
-      bool useNull = (v.size () == 0) && (H5_VERS_MAJOR < 1 || (H5_VERS_MAJOR == 1 && (H5_VERS_MINOR < 8 || (H5_VERS_MINOR == 8 && H5_VERS_RELEASE < 7))));
-      HDF5::DataSpace dataSpace;
-      if (useNull)
-        dataSpace = HDF5::DataSpace::create (H5S_NULL);
-      else
-        dataSpace = HDF5::DataSpace::createSimple (v.size (), 3);
-      HDF5::DataType memType = getMatlabH5MemoryType<T> ();
-      HDF5::DataType fileType = getMatlabH5FileType<T> ();
-      HDF5::DataSet dataSet = handle.createDataSet (fileType, dataSpace);
-      writeAttribute (dataSet, "MATLAB_class", MatlabTypeImpl<T>::matlabClass ());
-      if (!useNull)
-        // pass in dataSpace as fileSpace to avoid problems when v.data () is NULL (causes "no output buffer" error)
-        dataSet.write (v.data (), memType, dataSpace, dataSpace);
-    }
-    static inline void h5MatlabLoad (const MatlabDeserializationContextHandle<std::vector<Math::Vector3<T> > >& handle) {
-      MatlabObject mo (handle.get ());
-      if (mo.isEmpty ()) {
-        if (!mo.isNullDataSpace ()) {
-          ASSERT (mo.size ().size () == 2);
-          ASSERT (mo.size ()[0] == 0 || mo.size ()[0] == 3);
-          ASSERT (mo.size ()[1] == 0);
-        }
-        handle.registerValue (boost::make_shared<std::vector<Math::Vector3<T> > > (0));
-        return;
-      }
-      ASSERT (mo.size ().size () == 2);
-      ASSERT (mo.size ()[0] == 3);
-      size_t len = mo.size ()[1];
-
-      boost::shared_ptr<std::vector<Math::Vector3<T> > > ptr = boost::make_shared<std::vector<Math::Vector3<T> > > (len);
-      HDF5::DataType type = getMatlabH5MemoryType<T> ();
-      handle.registerValue (ptr);
-      mo.dataSet ().read (ptr->data (), type, mo.dataSpace ());
-    }
-  };
-
-  template <typename T> struct MatlabSerializer<Math::DiagMatrix3<T> > {
-    static inline void h5MatlabSave (const MatlabSerializationContextHandle& handle, const Math::DiagMatrix3<T>& v) {
-      HDF5::DataSpace dataSpace = HDF5::DataSpace::createSimple (3);
-      HDF5::DataType memType = getMatlabH5MemoryType<T> ();
-      HDF5::DataType fileType = getMatlabH5FileType<T> ();
-      HDF5::DataSet dataSet = handle.createDataSet (fileType, dataSpace);
-      writeAttribute (dataSet, "MATLAB_class", MatlabTypeImpl<T>::matlabClass ());
-      dataSet.write (&v.diag ().x (), memType, dataSpace);
-    }
-    static inline void h5MatlabLoad (const MatlabDeserializationContextHandle<Math::DiagMatrix3<T> >& handle) {
-      MatlabObject mo (handle.get ());
-      boost::shared_ptr<Math::DiagMatrix3<T> > ptr = boost::make_shared<Math::DiagMatrix3<T> > ();
-      handle.registerValue (ptr);
-      mo.get1dValues (&ptr->diag ().x (), 3);
-    }
-  };
-
-  template <typename T> struct MatlabSerializer<std::vector<Math::DiagMatrix3<T> > > {
-    static inline void h5MatlabSave (const MatlabSerializationContextHandle& handle, const std::vector<Math::DiagMatrix3<T> >& v) {
-      bool useNull = (v.size () == 0) && (H5_VERS_MAJOR < 1 || (H5_VERS_MAJOR == 1 && (H5_VERS_MINOR < 8 || (H5_VERS_MINOR == 8 && H5_VERS_RELEASE < 7))));
-      HDF5::DataSpace dataSpace;
-      if (useNull)
-        dataSpace = HDF5::DataSpace::create (H5S_NULL);
-      else
-        dataSpace = HDF5::DataSpace::createSimple (v.size (), 3);
-      HDF5::DataType memType = getMatlabH5MemoryType<T> ();
-      HDF5::DataType fileType = getMatlabH5FileType<T> ();
-      HDF5::DataSet dataSet = handle.createDataSet (fileType, dataSpace);
-      writeAttribute (dataSet, "MATLAB_class", MatlabTypeImpl<T>::matlabClass ());
-      if (!useNull)
-        // pass in dataSpace as fileSpace to avoid problems when v.data () is NULL (causes "no output buffer" error)
-        dataSet.write (v.data (), memType, dataSpace, dataSpace);
-    }
-    static inline void h5MatlabLoad (const MatlabDeserializationContextHandle<std::vector<Math::DiagMatrix3<T> > >& handle) {
-      MatlabObject mo (handle.get ());
-      if (mo.isEmpty ()) {
-        if (!mo.isNullDataSpace ()) {
-          ASSERT (mo.size ().size () == 2);
-          ASSERT (mo.size ()[0] == 0 || mo.size ()[0] == 3);
-          ASSERT (mo.size ()[1] == 0);
-        }
-        handle.registerValue (boost::make_shared<std::vector<Math::DiagMatrix3<T> > > (0));
-        return;
-      }
-      ASSERT (mo.size ().size () == 2);
-      ASSERT (mo.size ()[0] == 3);
-      size_t len = mo.size ()[1];
-
-      boost::shared_ptr<std::vector<Math::DiagMatrix3<T> > > ptr = boost::make_shared<std::vector<Math::DiagMatrix3<T> > > (len);
-      HDF5::DataType type = getMatlabH5MemoryType<T> ();
-      handle.registerValue (ptr);
-      mo.dataSet ().read (ptr->data (), type, mo.dataSpace ());
-    }
-  };
-
-  template <typename T> struct MatlabSerializer<Math::Quaternion<T> > {
-    static inline void h5MatlabSave (const MatlabSerializationContextHandle& handle, const Math::Quaternion<T>& v) {
-      HDF5::DataSpace dataSpace = HDF5::DataSpace::createSimple (4);
-      HDF5::DataType memType = getMatlabH5MemoryType<T> ();
-      HDF5::DataType fileType = getMatlabH5FileType<T> ();
-      HDF5::DataSet dataSet = handle.createDataSet (fileType, dataSpace);
-      writeAttribute (dataSet, "MATLAB_class", MatlabTypeImpl<T>::matlabClass ());
-      dataSet.write (&v.a (), memType, dataSpace);
-    }
-    static inline void h5MatlabLoad (const MatlabDeserializationContextHandle<Math::Quaternion<T> >& handle) {
-      MatlabObject mo (handle.get ());
-      boost::shared_ptr<Math::Quaternion<T> > ptr = boost::make_shared<Math::Quaternion<T> > ();
-      handle.registerValue (ptr);
-      mo.get1dValues (&ptr->a (), 4);
-    }
-  };
-
-  template <typename T> struct MatlabSerializer<std::vector<Math::Quaternion<T> > > {
-    static inline void h5MatlabSave (const MatlabSerializationContextHandle& handle, const std::vector<Math::Quaternion<T> >& v) {
-      bool useNull = (v.size () == 0) && (H5_VERS_MAJOR < 1 || (H5_VERS_MAJOR == 1 && (H5_VERS_MINOR < 8 || (H5_VERS_MINOR == 8 && H5_VERS_RELEASE < 7))));
-      HDF5::DataSpace dataSpace;
-      if (useNull)
-        dataSpace = HDF5::DataSpace::create (H5S_NULL);
-      else
-        dataSpace = HDF5::DataSpace::createSimple (v.size (), 4);
-      HDF5::DataType memType = getMatlabH5MemoryType<T> ();
-      HDF5::DataType fileType = getMatlabH5FileType<T> ();
-      HDF5::DataSet dataSet = handle.createDataSet (fileType, dataSpace);
-      writeAttribute (dataSet, "MATLAB_class", MatlabTypeImpl<T>::matlabClass ());
-      if (!useNull)
-        // pass in dataSpace as fileSpace to avoid problems when v.data () is NULL (causes "no output buffer" error)
-        dataSet.write (v.data (), memType, dataSpace, dataSpace);
-    }
-    static inline void h5MatlabLoad (const MatlabDeserializationContextHandle<std::vector<Math::Quaternion<T> > >& handle) {
-      MatlabObject mo (handle.get ());
-      if (mo.isEmpty ()) {
-        if (!mo.isNullDataSpace ()) {
-          ASSERT (mo.size ().size () == 2);
-          ASSERT (mo.size ()[0] == 0 || mo.size ()[0] == 4);
-          ASSERT (mo.size ()[1] == 0);
-        }
-        handle.registerValue (boost::make_shared<std::vector<Math::Quaternion<T> > > (0));
-        return;
-      }
-      ASSERT (mo.size ().size () == 2);
-      ASSERT (mo.size ()[0] == 4);
-      size_t len = mo.size ()[1];
-
-      boost::shared_ptr<std::vector<Math::Quaternion<T> > > ptr = boost::make_shared<std::vector<Math::Quaternion<T> > > (len);
-      HDF5::DataType type = getMatlabH5MemoryType<T> ();
-      handle.registerValue (ptr);
-      mo.dataSet ().read (ptr->data (), type, mo.dataSpace ());
+      mo.get1dStdVector (handle.ref ());
     }
   };
 
@@ -757,14 +692,23 @@ namespace HDF5 {
       else
         handle.addEmpty ();
     }
-    static inline boost::shared_ptr<boost::optional<T> > h5MatlabLoadNull (UNUSED const MatlabDeserializationContext& context) {
-      return boost::make_shared<boost::optional<T> > ();
+    static inline void h5MatlabLoadNullDirect (UNUSED MatlabDeserializationContext& context, boost::optional<T>& ref) {
+      //return boost::make_shared<boost::optional<T> > ();
+      ref = boost::none;
     }
-    static inline void h5MatlabLoad (const MatlabDeserializationContextHandle<boost::optional<T> >& handle) {
+    static inline void h5MatlabLoadDirect (const MatlabDeserializationContextHandleDirect<boost::optional<T> >& handle) {
       ASSERT (!handle.key ().isNull ());
-      boost::shared_ptr<boost::optional<T> > ptr = boost::make_shared<boost::optional<T> > ();
-      handle.registerValue (ptr);
-      *ptr = handle.context ().template resolveValue<T> (handle.key ());
+
+      //boost::shared_ptr<boost::optional<T> > ptr = boost::make_shared<boost::optional<T> > ();
+      //handle.registerValue (ptr);
+      //*ptr = handle.context ().template resolveValue<T> (handle.key ());
+
+      //boost::shared_ptr<boost::optional<T> > ptr = boost::make_shared<boost::optional<T> > (T ());
+      //handle.registerValue (ptr);
+      //handle.context ().template resolveValueDirect<T> (**ptr, handle.key (), NULL);
+
+      handle.ref () = boost::in_place ();
+      handle.context ().template resolveValueDirect<T> (*handle.ref (), handle.key (), NULL);
     }
   };
 
@@ -812,7 +756,8 @@ namespace HDF5 {
   namespace Intern {
     template <typename T>
     inline void loadToVar (T& ref, MatlabDeserializationContext& context, ObjectReference name, const char* memberName) {
-      ref = context.resolveValue<T> (name, memberName);
+      //ref = context.resolveValue<T> (name, memberName);
+      context.resolveValueDirect<T> (ref, name, memberName);
     }
 
     template <typename T>

@@ -25,7 +25,7 @@
 
 // Implementation of matlab hdf5 serialization for boost::multi_array<>
 
-#include <HDF5/Matlab.hpp>
+#include <HDF5/MatlabFull.hpp>
 
 #include <boost/multi_array.hpp>
 

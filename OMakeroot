@@ -48,7 +48,7 @@ DefineCommandVars()
 INCLUDES += $(ROOT)
 INCLUDES += $(ROOT)/lib/utf8cpp
 SYSTEM_INCLUDES += $(ROOT)/lib/opencl-1.1-headers
-INCLUDES += $(ROOT)/lib/opencl-cpp
+SYSTEM_INCLUDES += $(ROOT)/lib/opencl-cpp
 OpenCLIncludes += $(ROOT)
 
 OpenCLCFlags += -cl-fast-relaxed-math

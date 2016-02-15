@@ -69,7 +69,7 @@ section
 	e:
 		section
 			EmacsFilePatterns = *.in *.c *.h *.cpp *.cs *.n *.idl *.css *.as?x \
-				*.pkg *.java OMakefile BUGS TODO *.tex *.sty *.hpp *.cl \
+				*.pkg *.java OMakefile BUGS TODO *.tex *.sty *.hpp *.cl *.cu \
 				*.sh *.py
 
 		       	EmacsFiles = $(filter-exists OMakeroot debian/rules debian/control)
@@ -114,7 +114,7 @@ if $(file-exists $(ROOT)/.svn)
 		svn status --no-ignore || true
 elseif $(file-exists $(ROOT)/.git)
 	clean-all-status: clean-all
-		git clean -n -x
+		git clean -n -x -d
 
 # Local Variables: 
 # mode: Makefile-GMake

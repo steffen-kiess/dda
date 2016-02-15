@@ -22,11 +22,11 @@
 
 #include "DataSet.hpp"
 
+#include <Core/CheckedCast.hpp>
+
 #include <HDF5/DataType.hpp>
 #include <HDF5/DataSpace.hpp>
 #include <HDF5/File.hpp>
-
-#include <Core/BoostFilesystem.hpp>
 
 namespace HDF5 {
   void DataSet::checkType () const {
@@ -64,5 +64,12 @@ namespace HDF5 {
   }
   DataSetCreatePropList DataSet::createPropList () const {
     return DataSetCreatePropList (Exception::check ("H5Dget_create_plist", H5Dget_create_plist (handle ())));
+  }
+
+  uint64_t DataSet::getOffset () const {
+    haddr_t offset = H5Dget_offset (handle ());
+    if (offset == HADDR_UNDEF)
+      Exception::error ("H5Dget_offset");
+    return Core::checked_cast<uint64_t> (offset);
   }
 }

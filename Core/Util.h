@@ -71,11 +71,14 @@
 #if defined(__POSIX__) || defined (__unix) || defined (__unix__)
 #define OS_UNIX 1
 #define OS_WIN 0
+#elif defined(__APPLE__)
+#define OS_UNIX 1
+#define OS_WIN 0
 #elif defined(_WIN32)
 #define OS_UNIX 0
 #define OS_WIN 1
 #else
-#error "None of __POSIX__, __unix, __unix__ and _WIN32 is defined."
+#error "None of __POSIX__, __unix, __unix__, __APPLE__ and _WIN32 is defined."
 #endif
 
 #endif // !CORE_UTIL_H_INCLUDED

@@ -30,7 +30,8 @@ section
 		DataType Attribute BaseTypes CompoundType PropList PropLists \
 		AtomicType AtomicTypes DataTypes ReferenceType OpaqueType \
 		SerializationKey DelayedArray MultiArray Vector3 \
-		ComplexConversion)
+		ComplexConversion Array MatlabFull MatlabVector2 MatlabVector3 \
+		MatlabDiagMatrix3)
 	CLink (edi+, GetConsts, Exception GetConsts)
 
 LIBS += HDF5

@@ -31,6 +31,8 @@
 // Please note that serializing a deserialized object will not work (the created
 // dataset will not be written to).
 
+#include <Math/Array.hpp>
+
 #include <HDF5/Matlab.hpp>
 
 #include <boost/array.hpp>
@@ -41,9 +43,11 @@ namespace HDF5 {
     DelayedArray () {
       for (size_t i = 0; i < N; i++)
         size[i] = 0;
+      sizeUnknown = false;
     }
 
     boost::array<std::size_t, N> size;
+    bool sizeUnknown;
     mutable HDF5::DataSet dataSet;
 
     void read (T* ptr) const {
@@ -53,6 +57,36 @@ namespace HDF5 {
     void write (const T* ptr) const {
       ASSERT (dataSet.isValid ());
       dataSet.write (ptr, getH5Type<T> ());
+    }
+
+    template <typename Assert>
+    bool checkDimensionsStrides (const Math::ArrayView<const T, N, false, Math::ArrayConfig, Assert>& array) const {
+      ptrdiff_t stride = sizeof (T);
+      bool haveZero = false;
+      for (size_t i = 0; i < N; i++) {
+        size_t dsize = array.shape ()[i];
+        if (!dsize)
+          haveZero = true;
+        if (!sizeUnknown)
+          ASSERT (dsize == size[i]);
+        ASSERT (stride == array.stridesBytes () [i]); // must have fortran order
+        stride *= dsize;
+      }
+      if (sizeUnknown)
+        ASSERT (haveZero);
+      return !haveZero;
+    }
+
+    template <typename Assert>
+    void read (const Math::ArrayView<T, N, false, Math::ArrayConfig, Assert>& array) const {
+      if (checkDimensionsStrides (array))
+        read (array.data ());
+    }
+
+    template <typename Assert>
+    void write (const Math::ArrayView<const T, N, false, Math::ArrayConfig, Assert>& array) const {
+      if (checkDimensionsStrides (array))
+        write (array.data ());
     }
   };
 
@@ -75,27 +109,25 @@ namespace HDF5 {
       writeAttribute (dataSet, "MATLAB_class", MatlabTypeImpl<T>::matlabClass ());
       array.dataSet = dataSet;
     }
-    static inline void h5MatlabLoad (const MatlabDeserializationContextHandle<DelayedArray<T, N> >& handle) {
+    static inline void h5MatlabLoadDirect (const MatlabDeserializationContextHandleDirect<DelayedArray<T, N> >& handle) {
       MatlabObject mo (handle.get ());
 
-      boost::shared_ptr<DelayedArray<T, N> > array = boost::make_shared<DelayedArray<T, N> > ();
-      handle.registerValue (array);
-
-      if (mo.isEmpty () && mo.isNullDataSpace ()) {
+      if (mo.isNullDataSpace ()) {
         for (size_t i = 0; i < N; i++)
-          array->size[i] = 0;
+          handle.ref ().size[i] = 0;
+        handle.ref ().sizeUnknown = true;
       } else {
         //ASSERT (mo.size ().size () == N);
         ASSERT (mo.size ().size () == N || (mo.size ().size () <= N && mo.size ().size () >= 2));
         for (size_t i = 0; i < mo.size ().size () && i < N; i++)
-          array->size[i] = mo.size ()[i];
+          handle.ref ().size[i] = mo.size ()[i];
         for (size_t i = N; i < mo.size ().size (); i++)
           ASSERT (mo.size ()[i] == 1);
         for (size_t i = mo.size ().size (); i < N; i++)
-          array->size[i] = 1; // Assume missing dimensions have a size of 1
+          handle.ref ().size[i] = 1; // Assume missing dimensions have a size of 1
       }
 
-      array->dataSet = mo.dataSet ();
+      handle.ref ().dataSet = mo.dataSet ();
     }
   };
 }

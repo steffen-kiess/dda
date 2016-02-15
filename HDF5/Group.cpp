@@ -24,8 +24,6 @@
 
 #include <HDF5/File.hpp>
 
-#include <Core/BoostFilesystem.hpp>
-
 namespace HDF5 {
   void Group::checkType () const {
     if (!isValid ())

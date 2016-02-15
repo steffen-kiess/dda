@@ -24,7 +24,7 @@ LibDl. =
 	extends $(CLibraryDefinition)
 	Name = $'libdl'
 	LDFLAGS_lin = -ldl
-	LDFLAGS_win = -limagehlp
+	LDFLAGS_win = $(if $(USE_VS_CL), imagehlp.LIB, -limagehlp)
 
 # Local Variables: 
 # mode: Makefile-GMake

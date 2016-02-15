@@ -67,6 +67,8 @@ namespace HDF5 {
 
     DataSetAccessPropList accessPropList () const;
     DataSetCreatePropList createPropList () const;
+
+    uint64_t getOffset () const;
   };
 }
 

@@ -38,7 +38,6 @@
 #include <cstring>
 
 #include <sys/types.h>
-#include <unistd.h>
 
 #if OS_UNIX && !defined (__CYGWIN__)
 #include <execinfo.h>
@@ -51,7 +50,37 @@
 #include <imagehlp.h>
 #endif
 
+#ifndef _MSC_VER
 #include <cxxabi.h>
+#endif
+
+#ifndef _MSC_VER
+#include <unistd.h>
+#else
+#define popen _popen
+#define pclose _pclose
+static inline int MY_vsnprintf (char* str, size_t size, const char* format, va_list ap) {
+    int count = -1;
+
+    if (size != 0)
+        count = _vsnprintf_s (str, size, _TRUNCATE, format, ap);
+    if (count == -1)
+        count = _vscprintf (format, ap);
+
+    return count;
+}
+static inline int MY_snprintf (char* str, size_t size, const char* format, ...) {
+    int count;
+    va_list ap;
+
+    va_start (ap, format);
+    count = MY_vsnprintf (str, size, format, ap);
+    va_end (ap);
+
+    return count;
+}
+#define snprintf MY_snprintf
+#endif
 
 #if !OS_UNIX
 #ifndef WEXITSTATUS
@@ -169,7 +198,11 @@ namespace Core {
   InlineStackFrame::InlineStackFrame (const std::string& method, const std::string& sourceFile, uint64_t lineNumber) : _method (method), _sourceFile (sourceFile), _lineNumber (lineNumber) {
   }
 
-  StackFrame::StackFrame (void* ptr) : _ptr (ptr), _isResolved (false), _hasAddr2line (false) {}
+  StackFrame::StackFrame (void* ptr) :
+    _ptr (ptr), _isResolved (false),
+    _hasSharedObject (false), _sharedObjectBase (NULL), _hasSymbol (false), _symbolAddr (NULL), // will be reinitialized later, set to something here to make compiler happy
+    _hasAddr2line (false)
+  {}
 
   namespace {
     inline std::string pad (const std::string str, size_t* size, bool left = false) {
@@ -233,6 +266,7 @@ namespace Core {
           hasSymb = true;
 
           // demangle name
+#ifndef _MSC_VER
           if (symb.substr (0, 2) == "_Z") {
             size_t len;
             int status;
@@ -241,12 +275,14 @@ namespace Core {
             if (status == 0)
               symb = demangled.p;
           }
+#endif
         }
       }
       if (!hasSymb && hasSymbol ()) {
         symb = symbolName ();
 
         // demangle name
+#ifndef _MSC_VER
         if (symb.substr (0, 2) == "_Z") {
           size_t len;
           int status;
@@ -255,6 +291,7 @@ namespace Core {
           if (status == 0)
             symb = demangled.p;
         }
+#endif
 
         std::stringstream str2;
         str2 << symb << "+0x" << symbolOffset ();
@@ -374,6 +411,29 @@ namespace Core {
     _isResolved = true;
   }
 
+  static std::string escape (const std::string& s) {
+    std::stringstream str;
+#if OS_UNIX
+    str << "'";
+    for (size_t i = 0; i < s.length (); i++)
+      if (s[i] == '\'')
+        str << "'\\''";
+      else
+        str << s[i];
+    str << "'";
+#elif OS_WIN
+    str << "\"";
+    for (size_t i = 0; i < s.length (); i++) {
+      SIMPLE_ASSERT (s[i] != '"');
+      str << s[i];
+    }
+    str << "\"";
+#else
+#error
+#endif
+    return str.str ();
+  }
+
   void StackFrame::doAddr2line () const {
     if (_hasAddr2line)
       abort ();
@@ -399,19 +459,21 @@ namespace Core {
 
       std::stringstream str;
 
-      bool sharedLibrary = ((uintptr_t) ptr ()) > 0x40000000 && hasSharedObject (); // TODO: Replace this hack by better way to determine whether this is a shared library
+      bool sharedLibrary = ((uintptr_t) ptr ()) > 0x40000000 && hasSharedObject (); // XTODO: Replace this hack by better way to determine whether this is a shared library
 
       str << "addr2line -ife ";
-      if (hasSharedObject () && sharedObjectName () != "")
-        str << sharedObjectName ();
-      else
+      if (hasSharedObject () && sharedObjectName () != "") {
+        //str << sharedObjectName ();
+        str << escape (sharedObjectName ());
+      } else {
 #if OS_UNIX
         str << "/proc/" << getpid () << "/exe";
 #elif OS_WIN
-      str << "\"" << getCallingFilename () << "\"";
+        str << "\"" << getCallingFilename () << "\"";
 #else
 #error
 #endif
+      }
 
       // buffer[i] points to the return address, subtract 1 to get an address
       // in the call instruction
@@ -484,7 +546,7 @@ namespace Core {
             throw SimpleStdException ("unexpected EOF from addr2line" + cmdExpl);
           }
 
-          if (line == "??" && line2 == "??:0") {
+          if (line == "??" && (line2 == "??:0" || line2 == "??:?")) {
             if (frames.size () != 0) {
               int ret = check ("pclose", pclose (pipe));
               if (ret > 0) {
@@ -498,7 +560,7 @@ namespace Core {
           } else {
             long lineNr;
             std::string sourceFile;
-            if (line2 == "??:0") {
+            if (line2 == "??:0" || line2 == "??:?") {
               lineNr = 0;
               sourceFile = "";
             } else {
@@ -514,6 +576,12 @@ namespace Core {
               }
               sourceFile = line2.substr (0, pos);
               std::string lineString = line2.substr (pos + 1);
+
+              // Remove " (discriminator 1)" at end of string
+              std::size_t lineSpacePos = lineString.find (' ');
+              if (lineSpacePos != std::string::npos)
+                lineString = lineString.substr (0, lineSpacePos);
+
               const char* lineStringC = lineString.c_str ();
               char* end = NULL;
               lineNr = strtol (lineStringC, &end, 10);
@@ -567,6 +635,19 @@ namespace Core {
     }
 #elif OS_WIN
     ptrint eip, esp, ebp;
+#ifdef _MSC_VER
+    CONTEXT context;
+    RtlCaptureContext (&context);
+#ifdef _WIN64
+    eip = context.Rip;
+    esp = context.Rsp;
+    ebp = context.Rbp;
+#else
+    eip = context.Eip;
+    esp = context.Esp;
+    ebp = context.Ebp;
+#endif
+#else
     asm (
          "call L_a%= \n\t"
          "L_a%=: pop %0 \n\t"
@@ -575,7 +656,7 @@ namespace Core {
          "mov %%rsp, %1 \n\t"
          
          "mov %%rbp, %2 \n\t"
-#else         
+#else
          "mov %%esp, %1 \n\t"
          
          "mov %%ebp, %2 \n\t"
@@ -584,6 +665,7 @@ namespace Core {
            "=g" (esp),
            "=g" (ebp)
          );
+#endif
     
     STACKFRAME frame;
     memset (&frame, 0, sizeof (frame));

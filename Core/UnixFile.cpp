@@ -42,6 +42,10 @@ namespace Core {
   UnixFile UnixFile::open (const boost::filesystem::path& path, int flags, mode_t mode) {
     return UnixFile (Core::Error::check ("open", ::open (path.BOOST_FILE_STRING.c_str (), flags, mode)));
   }
+
+  UnixFile UnixFile::socket (int domain, int type, int protocol) {
+    return UnixFile (Core::Error::check ("socket", ::socket (domain, type, protocol)));
+  }
 }
 
 #endif // OS_UNIX

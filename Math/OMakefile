@@ -24,6 +24,11 @@ LIBS += ../Core/Core
 
 AddDefs ($(LibBoost.Common))
 
+#CXXFLAGS += -std=c++0x
+
 CLink (ed+t, MathTest, MathTest \
 	Abs DiagMatrix3 DiagMatrix3IOS Math Quaternion QuaternionIOS \
-	SymMatrix3 SymMatrix3IOS Vector3 Vector3IOS Float)
+	SymMatrix3 SymMatrix3IOS Vector3 Vector3IOS Float Array Vector2 \
+	Vector2IOS)
+
+CLink (ed+t, ArrayTest, ArrayTest ArrayTest2 Array)

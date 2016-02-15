@@ -90,4 +90,13 @@ namespace Core {
       return str.data ();
     }
   }
+
+  Error::IosStreamFail::~IosStreamFail () throw () {
+  }
+  
+  std::string Error::IosStreamFail::message () const {
+    std::stringstream str;
+    str << function () << ": Stream operation failed";
+    return str.str ();
+  }
 }

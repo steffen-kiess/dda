@@ -23,7 +23,6 @@
 #include "TimeSpan.hpp"
 
 #include <Core/Assert.hpp>
-#include <Core/StringUtil.hpp>
 
 #include <sstream>
 

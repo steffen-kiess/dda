@@ -24,8 +24,6 @@
 
 #include <HDF5/Group.hpp>
 
-#include <Core/BoostFilesystem.hpp>
-
 namespace HDF5 {
   void OpaqueType::checkType () const {
     if (!isValid ())

@@ -45,11 +45,52 @@ open build/Common
 
 open OMake/Util
 
-CC = gcc
-CXX = g++
-AR(name) =
-    return(ar cq $(name))
-RANLIB = ranlib
+if $(not $(defined USE_VS_CL))
+	if $(equal $(OSTYPE), Win32)
+		USE_VS_CL = 1
+		export
+	else
+		USE_VS_CL = 0
+		export
+	export
+
+if $(not $(USE_VS_CL))
+	CC = gcc
+	CXX = g++
+	OUTPUT_OBJFILE = -c -o $(EMPTY)
+	AR(name) =
+		return(ar cq $(name))
+	RANLIB = ranlib
+	export
+else
+	PATH += $'C:/Program Files (x86)/Microsoft Visual Studio 12.0/VC/bin/x86_amd64' $'C:/Program Files (x86)/Microsoft Visual Studio 12.0/VC/bin' #TODO
+	setenv (PATH, $(concat ;, $(PATH)))
+	CC = cl /nologo
+	CXX = cl /nologo
+	OUTPUT_OBJFILE = /c /Fo
+	if $(not $(defined INCLUDES))
+		INCLUDES =
+		export
+	if $(not $(defined DYNLIBDIRS))
+		DYNLIBDIRS =
+		export
+	INCLUDES[] +=
+		C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\crt\src
+		C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\include
+		C:\Program Files (x86)\Microsoft SDKs\Windows\v7.1A\Include
+	DYNLIBDIRS[] +=
+		C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\lib\amd64
+		C:\Program Files (x86)\Microsoft SDKs\Windows\v7.1A\Lib\x64
+#	TODO:
+	INCLUDES[] +=
+		C:\local\boost_1_55_0
+	DYNLIBDIRS[] +=
+		C:\local\boost_1_55_0\lib64-msvc-12.0
+	DYNLIBDIRS = $(dir $(DYNLIBDIRS))
+	AR(name) =
+		return(lib /nologo /debugtype:CV /out:$(name))
+	RANLIB = echo ranlib
+	export
 LD = ld
 
 # MacOS X specific config
@@ -57,13 +98,15 @@ if $(equal $(SYSNAME), Darwin)
     LDFLAGS_DLL = -dynamiclib
     export
 else
-    LDFLAGS_DLL = -shared
+    LDFLAGS_DLL = -shared -Wl,-z,defs
     export
 
 #CXX_EXTS[] = .cpp .cc .c++
 CXX_EXTS[] = .cpp
 
-private.CParameters = LIBS USE_CXX STATICLIBS CFLAGS CXXFLAGS DYNLIBS DYNLIBDIRS LDYNLIBS LDFLAGS WRAPPERDEPS INCLUDES SYSTEM_INCLUDES
+EXT_OBJ = .o
+
+private.CParameters = LIBS USE_CXX STATICLIBS CFLAGS CXXFLAGS CFLAGS_NOSCANNER CXXFLAGS_NOSCANNER DYNLIBS DYNLIBDIRS LDYNLIBS LDFLAGS WRAPPERDEPS INCLUDES SYSTEM_INCLUDES
 
 private.CFileOptions = STATICLIBS DYNLIBS DYNLIBDIRS LDYNLIBS WRAPPERDEPS
 private.CStringOptions = LDFLAGS USE_CXX
@@ -89,10 +132,10 @@ foreach (Parameter, $(CParameters))
 OBJDUMP = objdump
 
 public.LocalCGeneratedFiles(files) =
-    .SCANNER: scan-c-%: $(files)
-    .SCANNER: scan-cxx-%: $(files)
-    .SCANNER: scan-ct-%: $(files)
-    .SCANNER: scan-cxxt-%: $(files)
+    .SCANNER: scan-c-$(string $(id-escaped $(EXT_OBJ)))-%: $(files)
+    .SCANNER: scan-cxx-$(string $(id-escaped $(EXT_OBJ)))-%: $(files)
+    .SCANNER: scan-ct-$(string $(id-escaped $(EXT_OBJ)))-%: $(files)
+    .SCANNER: scan-cxxt-$(string $(id-escaped $(EXT_OBJ)))-%: $(files)
     export
 
 private.GetIfExist (v) =
@@ -105,29 +148,81 @@ ALL_PREFIXED_INCLUDES() =
 	value $(addprefix -isystem, $(SYSTEM_INCLUDES)) $(addprefix -I, $(INCLUDES))
 
 CDefineTargets (NAMES) =
-	$(addsuffix .o, $(NAMES)):
+	$(addsuffix $(EXT_OBJ), $(NAMES)):
 	export
 
-%.o: %.c :scanner: scan-ct-%.c
-    $(CC) $(CFLAGS) $(CFLAGS) $(ALL_PREFIXED_INCLUDES) -c -o $@ $<
-foreach(CXX_EXT, $(CXX_EXTS))
-    %.o: %$(CXX_EXT) :scanner: scan-cxxt-%$(CXX_EXT)
-        $(CXX) $(CXXFLAGS) $(ALL_PREFIXED_INCLUDES) -c -o $@ $<
+if $(USE_VS_CL)
+    Shell. +=
+        builtin-cc-depend(argv) =
+           filename = $(nth 0, $(argv))
+           depends[] =
+#           eprintln(BB)
+           awk(b, $(stdin))
+#           case $'.*'
+#              eprintln(AA$0)
+           case $'Note:.*including file: *\(.*\)$'
+              depends[] += $(file $"$1")
+              export
+           case $'.[(][0-9][0-9]*[)] : (warning|(fatal |)error) [A-Z][0-9]*: '
+              eprintln($0)
+           depends = $(string-escaped $(set $(depends)))
+           objname = $(string-escaped $(rootname $(filename))$(EXT_OBJ))
+           println($"$(objname): $(depends)")
     export
+Shell. +=
+	builtin-hide-filename(argv) =
+		if $(not $(USE_VS_CL))
+			cat $(stdin)
+		else
+			filename = $(nth 0, $(argv))
+			awk(b, $(stdin))
+			case $'.*'
+				if $(not $(equal $0, $(filename)))
+					println($0)
 
-.SCANNER: scan-ct-%.c: %.c /.PHONY/CGeneratedFilesTarget :value: $(digest-in-path-optional $(SYSTEM_INCLUDES) $(INCLUDES), $&)
-    $(CC) $(CFLAGS) $(ALL_PREFIXED_INCLUDES) -MM $<
-foreach(CXX_EXT, $(CXX_EXTS))
-    .SCANNER: scan-cxxt-%$(CXX_EXT): %$(CXX_EXT) /.PHONY/CGeneratedFilesTarget :value: $(digest-in-path-optional $(SYSTEM_INCLUDES) $(INCLUDES), $&)
-        $(CXX) $(CXXFLAGS) $(ALL_PREFIXED_INCLUDES) -MM $<
-    export .RULE
+CDefineImplicitRules () =
+    private.EXT_OBJ_COPY = $(EXT_OBJ)
+    %$(EXT_OBJ): %.c :scanner: $(if $(defined IGNORE_SCANNER), $(EMPTY), scan-ct-$(string $(id-escaped $(EXT_OBJ)))-%.c) :value: $(EXT_OBJ_COPY)
+        section
+            target = $(target $@)
+            if $(not $(equal $(target.build-values), $(EXT_OBJ)))
+                raise $(CMakeException $(string $"EXT_OBJ mismatch: CDefineImplicitRules() was called with $(target.build-values), now it is $(EXT_OBJ)"))
+        $(CC) $(CFLAGS) $(CFLAGS_NOSCANNER) $(ALL_PREFIXED_INCLUDES) $(OUTPUT_OBJFILE)$@ $< | builtin-hide-filename $<
+    foreach(CXX_EXT, $(CXX_EXTS))
+        %$(EXT_OBJ): %$(CXX_EXT) :scanner: $(if $(defined IGNORE_SCANNER), $(EMPTY), scan-cxxt-$(string $(id-escaped $(EXT_OBJ)))-%$(CXX_EXT)) :value: $(EXT_OBJ_COPY)
+            section
+                target = $(target $@)
+                if $(not $(equal $(target.build-values), $(EXT_OBJ)))
+                    raise $(CMakeException $(string $"EXT_OBJ mismatch: CDefineImplicitRules() was called with $(target.build-values), now it is $(EXT_OBJ)"))
+            $(CXX) $(CXXFLAGS) $(CXXFLAGS_NOSCANNER) $(ALL_PREFIXED_INCLUDES) $(OUTPUT_OBJFILE)$@ $< | builtin-hide-filename $<
+        export
+    if $(not $(USE_VS_CL))
+        .SCANNER: scan-ct-$(string $(id-escaped $(EXT_OBJ)))-%.c: %.c /.PHONY/CGeneratedFilesTarget :value: $(digest-in-path-optional $(SYSTEM_INCLUDES) $(INCLUDES), $&)
+            $(CC) $(CFLAGS) $(ALL_PREFIXED_INCLUDES) -MM $< -MT $(removeprefix scan-ct-$(string $(id-escaped $(EXT_OBJ)))-, $*)$(EXT_OBJ)
+        export .RULE
+    else
+        .SCANNER: scan-ct-$(string $(id-escaped $(EXT_OBJ)))-%.c: %.c /.PHONY/CGeneratedFilesTarget :value: $(digest-in-path-optional $(SYSTEM_INCLUDES) $(INCLUDES), $&)
+            $(CC) $(CFLAGS) $(ALL_PREFIXED_INCLUDES) /Zs /showIncludes $< |& builtin-cc-depend $<
+        export .RULE
+    foreach(CXX_EXT, $(CXX_EXTS))
+	if $(not $(USE_VS_CL))
+	        .SCANNER: scan-cxxt-$(string $(id-escaped $(EXT_OBJ)))-%$(CXX_EXT): %$(CXX_EXT) /.PHONY/CGeneratedFilesTarget :value: $(digest-in-path-optional $(SYSTEM_INCLUDES) $(INCLUDES), $&)
+		    $(CXX) $(CXXFLAGS) $(ALL_PREFIXED_INCLUDES) -MM $< -MT $(removeprefix scan-cxxt-$(string $(id-escaped $(EXT_OBJ)))-, $*)$(EXT_OBJ)
+	        export .RULE
+	else
+	        .SCANNER: scan-cxxt-$(string $(id-escaped $(EXT_OBJ)))-%$(CXX_EXT): %$(CXX_EXT) /.PHONY/CGeneratedFilesTarget :value: $(digest-in-path-optional $(SYSTEM_INCLUDES) $(INCLUDES), $&)
+			$(CXX) $(CXXFLAGS) $(ALL_PREFIXED_INCLUDES) /Zs /showIncludes $< |& builtin-cc-depend $<
+	        export .RULE
+        export .RULE
+    export
+CDefineImplicitRules ()
 
 CParseDep (name) =
 	scan (A, $(name).dep)
 	default
 		if $(mem $1, $(CFileOptions))
 			section
-				cd $(dirof $(name))
+				cd $(dirname $(name))
 				F = $(file $2)
 				export F
 			if $(not $(mem $F, $(getvar Scanned_$1)))
@@ -183,7 +278,7 @@ CParseDepFiles () =
 
 CCleanAll () =
 	clean:
-		rm -f *.o *.bin *.exe *.a *.dep *.dynlibs *.fdynlibs *.lin-*.sh *.win-*.bat *.so *.dll *.log
+		rm -f *$(EXT_OBJ) *.bin *.exe *.a *.dep *.dynlibs *.fdynlibs *.lin-*.sh *.win-*.bat *.so *.dll *.log
 
 CLink (FLAGS, TARGET, FILES) =
 	FLAGS = $(string $(FLAGS))
@@ -210,7 +305,7 @@ CLink (FLAGS, TARGET, FILES) =
 
 	if $(mem i, $(FLAGS_ARR))
 		foreach (FILE, $(FILES))
-			$(FILE).o:
+			$(FILE)$(EXT_OBJ):
 	if $(mem +, $(FLAGS_ARR))
 		USE_CXX = 1
 		export
@@ -227,7 +322,7 @@ CLink (FLAGS, TARGET, FILES) =
 		raise $(CMakeException Should not be reached)
 	if $(or $(mem t, $(FLAGS_ARR)), $(mem T, $(FLAGS_ARR)))
 		$(TARGET).log: $(TARGET)$(EXE) $(CTestDep)
-			logcmdquiet $@ $(dirof $(TARGET))/$(basename $(TARGET))$(EXE) $(CTestArguments)
+			logcmdquiet $@ $(dirname $(TARGET))/$(basename $(TARGET))$(EXE) $(CTestArguments)
 		.PHONY: alltest
 		alltest: $(TARGET).log
 		if $(mem t, $(FLAGS_ARR))
@@ -270,13 +365,16 @@ CLink (FLAGS, TARGET, FILES) =
 		if $(mem l, $(FLAGS_ARR))
 			Scanned_LDFLAGS += $(LDFLAGS_DLL)
 #			# Do not use dllexport, simply export all symbols (like under linux)
-			if $(equal $(SYSNAME), Windows)
+			if $(equal $(OSTYPE), Win32)
 				Scanned_LDFLAGS += -Wl,--export-all
 				export
 #			# Use -whole-archive to export all symbols in static libraries
 			value $(compiler) -o $(TARGET_FILE) $,(OFILES) -Wl,-whole-archive $(addsuffix $(EXT_LIB), $(rev $(Scanned_STATICLIBS))) -Wl,-no-whole-archive $(addprefix -L, $(rev $(Scanned_DYNLIBDIRS))) $(rev $(Scanned_DYNLIBS)) $(rev $(Scanned_LDFLAGS))
 		elseif $(mem e, $(FLAGS_ARR))
-			value $(compiler) -o $(TARGET_FILE) $,(OFILES) $(addsuffix $(EXT_LIB), $(rev $(Scanned_STATICLIBS))) $(addprefix -L, $(rev $(Scanned_DYNLIBDIRS))) $(rev $(Scanned_DYNLIBS)) $(rev $(Scanned_LDFLAGS))
+			if $(not $(USE_VS_CL))
+				value $(compiler) -o $(TARGET_FILE) $,(OFILES) $(addsuffix $(EXT_LIB), $(rev $(Scanned_STATICLIBS))) $(addprefix -L, $(rev $(Scanned_DYNLIBDIRS))) $(rev $(Scanned_DYNLIBS)) $(rev $(Scanned_LDFLAGS))
+			else
+				value $(compiler) -o $(TARGET_FILE) $,(OFILES) $(addsuffix $(EXT_LIB), $(rev $(Scanned_STATICLIBS))) /link $(addprefix /LIBPATH:, $(rev $(Scanned_DYNLIBDIRS))) $(rev $(Scanned_DYNLIBS)) $(rev $(Scanned_LDFLAGS))
 		else
 			raise $(CMakeException Should not be reached)
 	if $(or $(mem e, $(FLAGS_ARR)), $(mem l, $(FLAGS_ARR)))
@@ -325,10 +423,10 @@ AddDefs (libs) =
 			export
 		foreach (VAR, $(CParameters))
 			private.SUFFIXES = $(string)
-			if $(equal $(SYSNAME), Linux)
+			if $(equal $(OSTYPE), Unix)
 				SUFFIXES += _lin
 				export SUFFIXES
-			if $(equal $(SYSNAME), Windows)
+			if $(equal $(OSTYPE), Win32)
 				SUFFIXES += _win
 				export SUFFIXES
 			foreach (Suffix, $(SUFFIXES))

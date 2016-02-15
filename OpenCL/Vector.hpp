@@ -160,7 +160,7 @@ namespace OpenCL {
     ASSERT (dstIndex + count <= getSize ());
 
     if (count != 0)
-      queue.enqueueWriteBuffer (mem, true, (dstIndex * sizeof (F)) (), (count * sizeof (F)) (), (void*) data);
+      queue.enqueueWriteBuffer (mem, true, (dstIndex * sizeof (F)) (), (count * sizeof (F)) (), const_cast<F*> (data)); // const_cast<> is needed because OpenCL API incorrectly expects a non-const pointer
   }
 
   template <typename F> inline void Vector<F>::write (const cl::CommandQueue& queue, const std::vector<F>& data) {

@@ -23,6 +23,7 @@
 #include "Profiling.hpp"
 
 #include <sstream>
+#include <algorithm>
 
 namespace Core {
   std::string ProfilingTimes::toString () const {

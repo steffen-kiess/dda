@@ -108,7 +108,7 @@ namespace LinAlg {
     }
 
     TY(complex)* out = (TY(complex)*) output;
-    TY(complex)* in = (TY(complex)*) input;
+    TY(complex)* in = const_cast<TY(complex)*> ((const TY(complex)*) input); // const_cast<> is needed because the FFTW API expects a non-const input argument
 
     FUN(execute_dft) ((TY(plan)) p, in, out);
   }

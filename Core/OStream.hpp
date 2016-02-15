@@ -113,6 +113,19 @@ namespace Core {
       return *this;
     }
 
+    const OStream& write (const char* data, std::size_t n) const {
+      assertGood ();
+      (*this)->write (data, n);
+      assertGood ();
+      return *this;
+    }
+    const OStream& write (const std::vector<char>& v) const {
+      return write (v.data (), v.size ());
+    }
+    const OStream& write (const std::vector<uint8_t>& v) const {
+      return write ((const char*) v.data (), v.size ());
+    }
+
     template <typename T>
     static void addToFormat (boost::format& format, const T& head) {
       format % head;

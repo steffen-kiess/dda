@@ -24,8 +24,6 @@
 
 #include <HDF5/Group.hpp>
 
-#include <Core/BoostFilesystem.hpp>
-
 #include <boost/filesystem.hpp>
 
 namespace HDF5 {
@@ -57,15 +55,15 @@ namespace HDF5 {
       
     if (doCreate) { // create
       flags &= ~(H5F_ACC_RDONLY | H5F_ACC_RDWR | H5F_ACC_CREAT);
-      return File (Exception::check ("H5Fcreate", H5Fcreate (name.BOOST_FILE_STRING.c_str (), flags, fcpl.handleOrDefault (), fapl.handleOrDefault ())));
+      return File (Exception::check ("H5Fcreate", H5Fcreate (name.string ().c_str (), flags, fcpl.handleOrDefault (), fapl.handleOrDefault ())));
     } else { // open
       if ((flags & H5F_ACC_TRUNC) || (flags & H5F_ACC_EXCL)) // either Truncate or Exclusive
         ABORT_MSG ("Truncate or Exclusive set but Create not set");
-      return File (Exception::check ("H5Fopen", H5Fopen (name.BOOST_FILE_STRING.c_str (), flags, fapl.handleOrDefault ())));
+      return File (Exception::check ("H5Fopen", H5Fopen (name.string ().c_str (), flags, fapl.handleOrDefault ())));
     }
   }
   bool File::isHDF5 (const boost::filesystem::path& name) {
-    return Exception::check ("H5Fis_hdf5", H5Fis_hdf5 (name.BOOST_FILE_STRING.c_str ())) != 0;
+    return Exception::check ("H5Fis_hdf5", H5Fis_hdf5 (name.string ().c_str ())) != 0;
   }
 
   Group File::rootGroup () const {
@@ -80,5 +78,14 @@ namespace HDF5 {
   }
   int File::getVFDHandleFD (FileAccessPropList fapl) const {
     return *(int*)getVFDHandle (fapl);
+  }
+
+  std::string File::getFileName () const {
+    ssize_t size = Exception::check ("H5Fget_name", H5Fget_name (handle (), NULL, 0));
+    std::vector<char> name (size + 1);
+    ssize_t size2 = Exception::check ("H5Fget_name", H5Fget_name (handle (), name.data (), size + 1));
+    ASSERT (size == size2);
+    ASSERT (!name[size]);
+    return std::string (name.data (), size);
   }
 }

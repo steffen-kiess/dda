@@ -77,4 +77,10 @@ private:                                        \
 #define NVCC_HOST_DEVICE
 #endif
 
+#if defined (__CUDACC__) && defined (CUDART_VERSION) && CUDART_VERSION < 5000
+#define DECLTYPE(t) typeof (t)
+#else
+#define DECLTYPE(t) __decltype (t)
+#endif
+
 #endif // !CORE_UTIL_HPP_INCLUDED

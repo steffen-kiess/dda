@@ -100,7 +100,6 @@ namespace {
 
 template <class ftype>
 static void createGeometryDDAParams (const DDAOptions& opt, boost::shared_ptr<DDAParams<ftype> >& ddaParams, boost::shared_ptr<const Beam<ftype> >& beam, boost::shared_ptr<const CoupleConstants<ftype> >& cc1, boost::shared_ptr<const CoupleConstants<ftype> >& cc2, bool& symmetric, bool supportNonPot, cuint32_t procs = 1) {
-  typedef std::complex<ftype> ctype;
   boost::scoped_ptr<Core::ProfileHandle> p1;
   p1.reset (new Core::ProfileHandle (opt.prof, "ddaParams cr"));
 
@@ -284,8 +283,6 @@ static void createGeometryDDAParams (const DDAOptions& opt, boost::shared_ptr<DD
 
 template <class ftype>
 static void outputCrossSections (const boost::filesystem::path& output, const Core::OStream& out, const DDAParams<ftype>& ddaParams, FieldCalculator<ftype>& calculator, const boost::shared_ptr<const Beam<ftype> >& beam, const boost::shared_ptr<const CoupleConstants<ftype> >& cc, uint32_t polarizationNr, const std::string& label, const std::vector<std::complex<ftype> >& result, BeamPolarization pol) {
-  typedef std::complex<ftype> ctype;
-
   ftype normFactor;
   if (ddaParams.periodicityDimension () == 0) {
     ftype a_eq = std::pow (FPConst<ftype>::three_over_four_pi * static_cast<ftype> (ddaParams.nvCount ()), FPConst<ftype>::one_third) * ddaParams.gridUnit ();
@@ -607,18 +604,21 @@ static void ddaCl (const DDAOptions& opt) {
   boost::shared_ptr<GpuMatVec<ftype> > matVecInst;
   boost::scoped_ptr<OpenCL::MultiGpuVector<ctype> > dMatrixInst;
   boost::scoped_ptr<boost::multi_array<Math::SymMatrix3<ctype>, 3> > dMatrixCpuInst;
+  // boost::multi_array<T, n> does not inherit from boost::const_multi_array_ref<T, n> (which is equivalent to boost::const_multi_array_ref<T, n, const T*>) but from boost::const_multi_array_ref<T, n, T*>, so converting dMatrixCpuInst to const_multi_array_ref<> will create a new object which must be stored somewhere until createResOutput() is finished.
+  boost::scoped_ptr<boost::const_multi_array_ref<Math::SymMatrix3<ctype>, 3> > dMatrixCpuRef;
   if (!opt.map.count ("load-dip-pol")) {
     if (opt.map.count ("dmatrix-host")) {
       p1.reset (new Core::ProfileHandle (opt.prof, "Dmatrix"));
       opt.out << "Size of DMatrix: " << (g.cgridY () * g.cgridZ () * g.cgridX () * 6 * sizeof (ctype) / 1024 / 1024) << "MB" << std::endl;
       dMatrixCpuInst.reset (new boost::multi_array<Math::SymMatrix3<ctype>, 3> (boost::extents[g.gridY ()][g.gridZ ()][g.gridX ()], boost::fortran_storage_order ()));
+      dMatrixCpuRef.reset (new boost::const_multi_array_ref<Math::SymMatrix3<ctype>, 3> (*dMatrixCpuInst));
       const LinAlg::FFTPlanFactory<ftype>& cpuPlanFactory = LinAlg::getFFTWPlanFactory<ftype> ();
       if (!opt.map.count ("profiling-run"))
         DMatrixCpu<ftype>::createDMatrix (g, cpuPlanFactory, *dMatrixCpuInst, beam);
       p1.reset ();
 
       p1.reset (new Core::ProfileHandle (opt.prof, "cr matvec"));
-      matVecInst = GpuMatVec<ftype>::create (queues, g, *dMatrixCpuInst, planFactory, pool, accounting, opt.prof);
+      matVecInst = GpuMatVec<ftype>::create (queues, g, *dMatrixCpuRef, planFactory, pool, accounting, opt.prof);
       p1.reset ();
     } else {
       p1.reset (new Core::ProfileHandle (opt.prof, "Dmatrix"));

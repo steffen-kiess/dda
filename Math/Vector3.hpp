@@ -55,31 +55,35 @@ namespace Math {
 
     class PrivateType {
       friend class Vector3;
-      PrivateType () {}
+      NVCC_HOST_DEVICE PrivateType () {}
     };
 
   public:
-    Vector3 () {}
+    NVCC_HOST_DEVICE Vector3 () {}
+#if !defined (__CUDACC__)
 #if defined (__clang__) || GCC_VERSION_IS_ATLEAST(4, 6)
 #pragma GCC diagnostic push
 #endif
 #pragma GCC diagnostic ignored "-Wconversion"
-#ifdef VECTOR3_USE_ARRAY
-    //explicit Vector3 (T v) { data_[0] = v; data_[1] = v; data_[2] = v; }
-    Vector3 (T x, T y, T z) { data_[0] = x; data_[1] = y; data_[2] = z; }
-    template <typename U> Vector3 (Vector3<U> v, UNUSED typename boost::enable_if<boost::is_convertible<U, T>, PrivateType>::type dummy = PrivateType ()) { data_[0] = v.x (); data_[1] = v.y (); data_[2] = v.z (); }
-    template <typename U> explicit Vector3 (Vector3<U> v, UNUSED typename boost::disable_if<boost::is_convertible<U, T>, PrivateType>::type dummy = PrivateType ()) { data_[0] = (T) v.x (); data_[1] = (T) v.y (); data_[2] = (T) v.z (); }
-#else
-    //explicit Vector3 (T v) : x_ (v), y_ (v), z_ (v) {}
-    Vector3 (T x, T y, T z) : x_ (x), y_ (y), z_ (z) {}
-    template <typename U> Vector3 (Vector3<U> v, UNUSED typename boost::enable_if<boost::is_convertible<U, T>, PrivateType>::type dummy = PrivateType ()) : x_ (v.x ()), y_ (v.y ()), z_ (v.z ()) {}
-    template <typename U> explicit Vector3 (Vector3<U> v, UNUSED typename boost::disable_if<boost::is_convertible<U, T>, PrivateType>::type dummy = PrivateType ()) : x_ (v.x ()), y_ (v.y ()), z_ (v.z ()) {}
 #endif
+#ifdef VECTOR3_USE_ARRAY
+    //NVCC_HOST_DEVICE explicit Vector3 (T v) { data_[0] = v; data_[1] = v; data_[2] = v; }
+    NVCC_HOST_DEVICE Vector3 (T x, T y, T z) { data_[0] = x; data_[1] = y; data_[2] = z; }
+    template <typename U> NVCC_HOST_DEVICE Vector3 (Vector3<U> v, UNUSED typename boost::enable_if<boost::is_convertible<U, T>, PrivateType>::type dummy = PrivateType ()) { data_[0] = v.x (); data_[1] = v.y (); data_[2] = v.z (); }
+    template <typename U> NVCC_HOST_DEVICE explicit Vector3 (Vector3<U> v, UNUSED typename boost::disable_if<boost::is_convertible<U, T>, PrivateType>::type dummy = PrivateType ()) { data_[0] = (T) v.x (); data_[1] = (T) v.y (); data_[2] = (T) v.z (); }
+#else
+    //NVCC_HOST_DEVICE explicit Vector3 (T v) : x_ (v), y_ (v), z_ (v) {}
+    NVCC_HOST_DEVICE Vector3 (T x, T y, T z) : x_ (x), y_ (y), z_ (z) {}
+    template <typename U> NVCC_HOST_DEVICE Vector3 (Vector3<U> v, UNUSED typename boost::enable_if<boost::is_convertible<U, T>, PrivateType>::type dummy = PrivateType ()) : x_ (v.x ()), y_ (v.y ()), z_ (v.z ()) {}
+    template <typename U> NVCC_HOST_DEVICE explicit Vector3 (Vector3<U> v, UNUSED typename boost::disable_if<boost::is_convertible<U, T>, PrivateType>::type dummy = PrivateType ()) : x_ (v.x ()), y_ (v.y ()), z_ (v.z ()) {}
+#endif
+#if !defined (__CUDACC__)
 #if defined (__clang__) || GCC_VERSION_IS_ATLEAST(4, 6)
 #pragma GCC diagnostic pop
 #endif
+#endif
 
-    const T& x () const {
+    NVCC_HOST_DEVICE const T& x () const {
 #ifdef VECTOR3_USE_ARRAY
       return data_[0];
 #else
@@ -87,7 +91,7 @@ namespace Math {
 #endif
     }
 
-    const T& y () const {
+    NVCC_HOST_DEVICE const T& y () const {
 #ifdef VECTOR3_USE_ARRAY
       return data_[1];
 #else
@@ -95,7 +99,7 @@ namespace Math {
 #endif
     }
 
-    const T& z () const {
+    NVCC_HOST_DEVICE const T& z () const {
 #ifdef VECTOR3_USE_ARRAY
       return data_[2];
 #else
@@ -103,7 +107,7 @@ namespace Math {
 #endif
     }
 
-    T& x () {
+    NVCC_HOST_DEVICE T& x () {
 #ifdef VECTOR3_USE_ARRAY
       return data_[0];
 #else
@@ -111,7 +115,7 @@ namespace Math {
 #endif
     }
 
-    T& y () {
+    NVCC_HOST_DEVICE T& y () {
 #ifdef VECTOR3_USE_ARRAY
       return data_[1];
 #else
@@ -119,7 +123,7 @@ namespace Math {
 #endif
     }
 
-    T& z () {
+    NVCC_HOST_DEVICE T& z () {
 #ifdef VECTOR3_USE_ARRAY
       return data_[2];
 #else
@@ -127,7 +131,7 @@ namespace Math {
 #endif
     }
 
-    const T& operator[] (size_t i) const {
+    NVCC_HOST_DEVICE const T& operator[] (size_t i) const {
 #ifdef VECTOR3_USE_ARRAY
       ASSERT (i >= 0 && i < 3);
       return data_[i];
@@ -143,7 +147,7 @@ namespace Math {
 #endif
     }
 
-    T& operator[] (size_t i) {
+    NVCC_HOST_DEVICE T& operator[] (size_t i) {
 #ifdef VECTOR3_USE_ARRAY
       ASSERT (i >= 0 && i < 3);
       return data_[i];
@@ -164,52 +168,59 @@ namespace Math {
 
 #define RTS(op) __decltype ((*(T*)NULL) op (*(U*)NULL))
 #define RT(op) Vector3<RTS(op)>
-  template <typename T, typename U> inline RT(+) operator+ (Vector3<T> v1, Vector3<U> v2) {
-    return RT(+) (v1.x () + v2.x (), v1.y () + v2.y (), v1.z () + v2.z ());
+#ifdef __CUDACC__ // Workaround BugPlayground/nvcc-5.0-templates-1.cu
+  template <typename T> static ERROR_ATTRIBUTE ("should not be called") Vector3<T> helperGetVector3Type (T t);
+#define RT2(op) __decltype (helperGetVector3Type ((*(T*)NULL) op (*(U*)NULL)))
+#define RETURN_RT(op) typedef RT2(op) Ty; return Ty
+#else
+#define RETURN_RT(op) return RT(op)
+#endif
+  template <typename T, typename U> NVCC_HOST_DEVICE inline RT(+) operator+ (Vector3<T> v1, Vector3<U> v2) {
+    RETURN_RT(+) (v1.x () + v2.x (), v1.y () + v2.y (), v1.z () + v2.z ());
   }
 
-  template <typename T, typename U> inline Vector3<T>& operator+= (Vector3<T>& v1, Vector3<U> v2) {
+  template <typename T, typename U> NVCC_HOST_DEVICE inline Vector3<T>& operator+= (Vector3<T>& v1, Vector3<U> v2) {
     v1.x () += v2.x (); v1.y () += v2.y (); v1.z () += v2.z ();
     return v1;
   }
 
 
-  template <typename T, typename U> inline RT(-) operator- (Vector3<T> v1, Vector3<U> v2) {
-    return RT(-) (v1.x () - v2.x (), v1.y () - v2.y (), v1.z () - v2.z ());
+  template <typename T, typename U> NVCC_HOST_DEVICE inline RT(-) operator- (Vector3<T> v1, Vector3<U> v2) {
+    RETURN_RT(-) (v1.x () - v2.x (), v1.y () - v2.y (), v1.z () - v2.z ());
   }
 
-  template <typename T, typename U> inline Vector3<T>& operator-= (Vector3<T>& v1, Vector3<U> v2) {
+  template <typename T, typename U> NVCC_HOST_DEVICE inline Vector3<T>& operator-= (Vector3<T>& v1, Vector3<U> v2) {
     v1.x () -= v2.x (); v1.y () -= v2.y (); v1.z () -= v2.z ();
     return v1;
   }
 
 
-  template <typename T, typename U> inline RT(*) operator* (Vector3<T> v, U scalar) {
-    return RT(*) (v.x () * scalar, v.y () * scalar, v.z () * scalar);
+  template <typename T, typename U> NVCC_HOST_DEVICE inline RT(*) operator* (Vector3<T> v, U scalar) {
+    RETURN_RT(*) (v.x () * scalar, v.y () * scalar, v.z () * scalar);
   }
 
-  template <typename T, typename U> inline RT(*) operator* (T scalar, Vector3<U> v) {
-    return RT(*) (scalar * v.x (), scalar * v.y (), scalar * v.z ());
+  template <typename T, typename U> NVCC_HOST_DEVICE inline RT(*) operator* (T scalar, Vector3<U> v) {
+    RETURN_RT(*) (scalar * v.x (), scalar * v.y (), scalar * v.z ());
   }
 
-  template <typename T, typename U> inline Vector3<T>& operator*= (Vector3<T>& v, U scalar) {
+  template <typename T, typename U> NVCC_HOST_DEVICE inline Vector3<T>& operator*= (Vector3<T>& v, U scalar) {
     v.x () *= scalar; v.y () *= scalar; v.z () *= scalar;
     return v;
   }
 
-  template <typename T, typename U> inline RT(/) operator/ (Vector3<T> v, U scalar) {
-    return RT(/) (v.x () / scalar, v.y () / scalar, v.z () / scalar);
+  template <typename T, typename U> NVCC_HOST_DEVICE inline RT(/) operator/ (Vector3<T> v, U scalar) {
+    RETURN_RT(/) (v.x () / scalar, v.y () / scalar, v.z () / scalar);
   }
 
-  template <typename T, typename U> inline Vector3<T>& operator/= (Vector3<T>& v, U scalar) {
+  template <typename T, typename U> NVCC_HOST_DEVICE inline Vector3<T>& operator/= (Vector3<T>& v, U scalar) {
     v.x () /= scalar; v.y () /= scalar; v.z () /= scalar;
     return v;
   }
 
-  template <typename T> inline bool operator== (Vector3<T> v1, Vector3<T> v2) {
+  template <typename T> NVCC_HOST_DEVICE inline bool operator== (Vector3<T> v1, Vector3<T> v2) {
     return v1.x () == v2.x () && v1.y () == v2.y () && v1.z () == v2.z ();
   }
-  template <typename T> inline bool operator!= (Vector3<T> v1, Vector3<T> v2) {
+  template <typename T> NVCC_HOST_DEVICE inline bool operator!= (Vector3<T> v1, Vector3<T> v2) {
     return !(v1 == v2);
   }
 
@@ -220,12 +231,12 @@ namespace Math {
   };
 
   // dot product
-  template <typename T, typename U> inline RTS(*) operator* (Vector3<T> v1, Vector3<U> v2) {
+  template <typename T, typename U> NVCC_HOST_DEVICE inline RTS(*) operator* (Vector3<T> v1, Vector3<U> v2) {
     return v1.x () * v2.x () + v1.y () * v2.y () + v1.z () * v2.z ();
   }
 
-  template <typename T, typename U> inline RT(*) crossProduct (Vector3<T> v1, Vector3<U> v2) {
-    return RT(*) (v1.y () * v2.z () - v1.z () * v2.y (),
+  template <typename T, typename U> NVCC_HOST_DEVICE inline RT(*) crossProduct (Vector3<T> v1, Vector3<U> v2) {
+    RETURN_RT(*) (v1.y () * v2.z () - v1.z () * v2.y (),
                   v1.z () * v2.x () - v1.x () * v2.z (),
                   v1.x () * v2.y () - v1.y () * v2.x ());
   }
@@ -236,24 +247,28 @@ namespace Math {
 
 #undef RTS
 #undef RT
+#ifdef __CUDACC__ // Workaround BugPlayground/nvcc-5.0-templates-1.cu
+#undef RT2
+#undef RETURN_RT
+#endif
 
   // Unary +/-
-  template <typename T> inline Vector3<T> operator+ (Vector3<T> v) {
+  template <typename T> NVCC_HOST_DEVICE inline Vector3<T> operator+ (Vector3<T> v) {
     return Vector3<T> (+v.x (), +v.y (), +v.z ());
   }
-  template <typename T> inline Vector3<T> operator- (Vector3<T> v) {
+  template <typename T> NVCC_HOST_DEVICE inline Vector3<T> operator- (Vector3<T> v) {
     return Vector3<T> (-v.x (), -v.y (), -v.z ());
   }
 
-  template <typename F> Vector3<F> real (Vector3<std::complex<F> > v) {
+  template <typename F> Vector3<F> inline real (Vector3<std::complex<F> > v) {
     return Vector3<F> (real (v.x ()), real (v.y ()), real (v.z ()));
   }
 
-  template <typename F> Vector3<F> imag (Vector3<std::complex<F> > v) {
+  template <typename F> Vector3<F> inline imag (Vector3<std::complex<F> > v) {
     return Vector3<F> (imag (v.x ()), imag (v.y ()), imag (v.z ()));
   }
 
-  template <typename F> Vector3<std::complex<F> > conj (Vector3<std::complex<F> > v) {
+  template <typename F> Vector3<std::complex<F> > inline conj (Vector3<std::complex<F> > v) {
     return Vector3<std::complex<F> > (conj (v.x ()), conj (v.y ()), conj (v.z ()));
   }
 }

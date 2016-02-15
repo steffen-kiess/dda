@@ -55,7 +55,7 @@ namespace HDF5 {
     }
     C(int) C(long)
     // C(hid_t)
-    C(H5I_type_t) C(H5S_class_t) C(H5T_class_t)
+    C(H5I_type_t) C(H5S_class_t) C(H5T_class_t) C(H5T_sign_t)
 #undef C
     template <typename T>
     static T* check (const char* methodName, T* value) {

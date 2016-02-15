@@ -25,8 +25,6 @@
 #include <HDF5/Group.hpp>
 #include <HDF5/DataType.hpp>
 
-#include <Core/BoostFilesystem.hpp>
-
 namespace HDF5 {
   void Attribute::checkType () const {
     if (!isValid ())

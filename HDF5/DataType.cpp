@@ -24,8 +24,6 @@
 
 #include <HDF5/Group.hpp>
 
-#include <Core/BoostFilesystem.hpp>
-
 namespace HDF5 {
   void DataType::checkType () const {
     if (!isValid ())
@@ -55,5 +53,19 @@ namespace HDF5 {
 
   bool DataType::equals (const DataType& other) const {
     return Exception::check ("H5Tequal", H5Tequal (handle (), other.handle ())) != 0;
+  }
+
+  std::vector<uint8_t> DataType::encode () const {
+    size_t size = 0;
+    Exception::check ("H5Tencode", H5Tencode (handle (), NULL, &size));
+    std::vector<uint8_t> data (size);
+    size_t size1 = size;
+    Exception::check ("H5Tencode", H5Tencode (handle (), data.data (), &size));
+    ASSERT (size1 == size);
+    return data;
+  }
+
+  H5T_sign_t DataType::getSign () const {
+    return Exception::check ("H5Tget_sign", H5Tget_sign (handle ()));
   }
 }

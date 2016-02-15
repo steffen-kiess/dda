@@ -126,25 +126,48 @@ namespace Core {
       return value;
     }
 
+    class IosStreamFail : public Exception {
+      std::string function_;
+
+    public:
+      IosStreamFail (std::string function) : function_ (function) {
+      }
+
+      virtual ~IosStreamFail () throw ();
+
+      virtual std::string message () const;
+
+      const std::string& function () const {
+        return function_;
+      }
+    };
     // There is no guarantee that std::*stream sets errno, but it has no other
     // way to show it's error...
     template <typename T>
     static inline const std::basic_ios<T>& check (const char* function, const std::basic_ios<T>& value) {
-      if (value.fail ()) {
+      if (value.bad ()) {
         int errnum = errno;
         ASSERT_MSG (errnum != 0, "errno is 0");
         throw Error (function, errnum);
+      }
+      if (value.fail ()) {
+        // Assume that errno doesn't get set when failbit ist set but not badbit
+        throw IosStreamFail (function);
       }
       return value;
     }
     template <typename T>
     static inline const std::basic_ios<T>& checkIgnore (const char* function, const std::basic_ios<T>& value, int ignore) {
-      if (value.fail ()) {
+      if (value.bad ()) {
         int errnum = errno;
         if (errnum != ignore) {
           ASSERT_MSG (errnum != 0, "errno is 0");
           throw Error (function, errnum);
         }
+      }
+      if (value.fail ()) {
+        // Assume that errno doesn't get set when failbit ist set but not badbit
+        throw IosStreamFail (function);
       }
       return value;
     }

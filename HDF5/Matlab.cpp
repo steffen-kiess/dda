@@ -22,7 +22,7 @@
 
 #include "Matlab.hpp"
 
-#include <Core/CheckedInteger.hpp>
+#include <Core/CheckedCast.hpp>
 
 #include <unistd.h>
 
@@ -30,7 +30,7 @@
 
 #include <boost/foreach.hpp>
 
-#include <utf8.h>
+#include <lib/utf8cpp/utf8.h>
 
 namespace HDF5 {
   MatlabSerializationContext::MatlabSerializationContext (const HDF5::File& file)
@@ -144,7 +144,8 @@ namespace HDF5 {
       } else {
         dataSpace_ = dataSet_.getSpace ();
         H5S_class_t extentType = dataSpace_.getSimpleExtentType ();
-        ASSERT (extentType == H5S_SIMPLE || extentType == H5S_NULL);
+        //ASSERT (extentType == H5S_SIMPLE || extentType == H5S_NULL);
+        ASSERT (extentType == H5S_SIMPLE || extentType == H5S_NULL || extentType == H5S_SCALAR);
         if (extentType == H5S_SIMPLE) {
           isNullDataSpace_ = false;
           size_t dim = dataSpace_.getSimpleExtentNdims ();
@@ -161,6 +162,12 @@ namespace HDF5 {
           if (isEmpty_) {
             dataSpace_ = HDF5::DataSpace ();
           }
+        } else if (extentType == H5S_SCALAR) {
+          isNullDataSpace_ = false;
+          isEmpty_ = false;
+          //size_.resize (0);
+          size_.resize (1);
+          size_[0] = 1;
         } else { // H5S_NULL
           isEmpty_ = true;
           isNullDataSpace_ = true;
@@ -272,13 +279,25 @@ namespace HDF5 {
   }
 
   HDF5::DataSet MatlabSerializationContextHandle::createDataSet (const HDF5::DataType& data_type, const HDF5::DataSpace& data_space, DataSetCreatePropList dcpl) const {
-    HDF5::DataSet ds = HDF5::DataSet::create (context ().file (), data_type, data_space, dcpl);
+    // Disable time tracking for objects to make HDF5 files more deterministic
+    DataSetCreatePropList dcpl2;
+    if (dcpl.isValid ())
+      dcpl2 = (DataSetCreatePropList) dcpl.copy ();
+    else
+      dcpl2 = DataSetCreatePropList::create ();
+    HDF5::Exception::check ("H5Pset_obj_track_times", H5Pset_obj_track_times (dcpl2.handle (), false));
+
+    HDF5::DataSet ds = HDF5::DataSet::create (context ().file (), data_type, data_space, dcpl2);
     add (ds);
     return ds;
   }
 
   HDF5::Group MatlabSerializationContextHandle::createGroup () const {
-    HDF5::Group group = HDF5::Group::create (context ().file ());
+    // Disable time tracking for objects to make HDF5 files more deterministic
+    GroupCreatePropList gcpl = GroupCreatePropList::create ();
+    HDF5::Exception::check ("H5Pset_obj_track_times", H5Pset_obj_track_times (gcpl.handle (), false));
+
+    HDF5::Group group = HDF5::Group::create (context ().file (), gcpl);
     writeAttribute (group, "MATLAB_class", "struct");
     add (group);
     return group;

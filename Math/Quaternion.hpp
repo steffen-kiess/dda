@@ -54,16 +54,20 @@ namespace Math {
     {
     }
 
+#if !defined (__CUDACC__)
 #if defined (__clang__) || GCC_VERSION_IS_ATLEAST(4, 6)
 #pragma GCC diagnostic push
+#endif
 #endif
 #pragma GCC diagnostic ignored "-Wconversion"
     template <typename U> Quaternion (Quaternion<U> q, UNUSED typename boost::enable_if<boost::is_convertible<U, ftype>, PrivateType>::type dummy = PrivateType ()) : a_ (q.a ()), b_ (q.b ()), c_ (q.c ()), d_ (q.d ()) {}
 #ifndef SWIG
     template <typename U> explicit Quaternion (Quaternion<U> q, UNUSED typename boost::disable_if<boost::is_convertible<U, ftype>, PrivateType>::type dummy = PrivateType ()) : a_ (q.a ()), b_ (q.b ()), c_ (q.c ()), d_ (q.d ()) {}
 #endif
+#if !defined (__CUDACC__)
 #if defined (__clang__) || GCC_VERSION_IS_ATLEAST(4, 6)
 #pragma GCC diagnostic pop
+#endif
 #endif
 
     const ftype& a () const { return a_; }

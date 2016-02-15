@@ -162,7 +162,6 @@ namespace DDA {
 
   template <class ftype>
   void FarFieldCalc<ftype>::calcAndStore (const boost::filesystem::path& outputPrefix, const DDAParams<ftype>& ddaParams, FieldCalculator<ftype>& calculator, const boost::shared_ptr<EMSim::DataFiles::Parameters<EMSim::DataFiles::DDAParameters> >& parameters, const std::vector<std::complex<ftype> >& res1, const std::vector<std::complex<ftype> >& res2, bool symmetric, const Beam<ftype>& beam, const EMSim::AngleList& angleList, const std::vector<FarFieldOption>& options, bool writeTxt) {
-    typedef std::complex<ftype> ctype;
     boost::shared_ptr<std::vector<EMSim::FarFieldEntry<ftype> > > eField1 = FarFieldCalc<ftype>::calcEField (ddaParams, calculator, angleList, res1, ddaParams.dipoleGeometry ().orientationInverse () * beam.prop (), beam.getIncPolP (ddaParams.dipoleGeometry (), BEAMPOLARIZATION_2), beam.getIncPolP (ddaParams.dipoleGeometry (), BEAMPOLARIZATION_1));
     boost::shared_ptr<std::vector<EMSim::FarFieldEntry<ftype> > > eField2;
     if (symmetric)

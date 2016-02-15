@@ -22,7 +22,6 @@
 
 #include "CompoundType.hpp"
 
-#include <Core/BoostFilesystem.hpp>
 #include <Core/Memory.hpp>
 
 #include <HDF5/Group.hpp>

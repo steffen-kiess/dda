@@ -23,6 +23,7 @@
 #include "DataFiles.hpp"
 
 #include <Core/OStream.hpp>
+#include <Core/BoostFilesystem.hpp>
 
 #include <sstream>
 

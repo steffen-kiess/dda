@@ -48,8 +48,8 @@ namespace Core {
     return std::string (retbuf.data (), ret);
 #elif OS_WIN
     std::vector<char> retbuf (2);
-    ssize_t ret;
-    while ((ret = GetModuleFileName (NULL, retbuf.data (), retbuf.size ())) == (ssize_t) retbuf.size ())
+    DWORD ret;
+    while ((ret = GetModuleFileName (NULL, retbuf.data (), retbuf.size ())) == (DWORD) retbuf.size ())
       retbuf.resize ((csize_t (retbuf.size ()) * 2) ());
     Core::WindowsError::check ("GetModuleFileName", ret);
     ASSERT ((size_t) ret <= retbuf.size ());

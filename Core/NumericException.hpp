@@ -40,13 +40,6 @@
 #include <limits.h>
 
 namespace Core {
-  namespace CheckedIntegerOperations {
-    enum Operation {
-      add, sub, mul, div, rem
-    };
-  }
-  typedef CheckedIntegerOperations::Operation CheckedIntegerOperationsType;
-
   namespace Intern {
     template <typename T> inline std::string intToString (T a) {
       std::stringstream str;
@@ -62,45 +55,6 @@ namespace Core {
   };
 
   class ConversionOverflowException : public virtual NumericException {
-  };
-
-  class BinaryOperationNumericException : public virtual NumericException {
-    CheckedIntegerOperationsType _operation;
-
-  public:
-    BinaryOperationNumericException (CheckedIntegerOperationsType operation) : _operation (operation) {
-    }
-
-    static const char* operationToString (CheckedIntegerOperationsType operation) {
-      switch (operation) {
-      case CheckedIntegerOperations::add: return "+";
-      case CheckedIntegerOperations::sub: return "-";
-      case CheckedIntegerOperations::mul: return "*";
-      case CheckedIntegerOperations::div: return "/";
-      case CheckedIntegerOperations::rem: return "%";
-      }
-      ABORT ();
-    }
-
-    CheckedIntegerOperationsType operationCode () const {
-      return _operation;
-    }
-
-    const char* operation () const {
-      return operationToString (operationCode ());
-    }
-  };
-
-  class BinaryOperationOverflowException : public virtual BinaryOperationNumericException {
-  public:
-    BinaryOperationOverflowException (CheckedIntegerOperationsType operation) : BinaryOperationNumericException (operation) {
-    }
-  };
-
-  class DivisionByZeroException : public virtual BinaryOperationNumericException {
-  public:
-    DivisionByZeroException (CheckedIntegerOperationsType operation) : BinaryOperationNumericException (operation) {
-    }
   };
 
   template <typename TargetType> class TargetTypedNumericException : public virtual NumericException {
@@ -126,37 +80,6 @@ namespace Core {
     }
   };
 
-  template <typename T> class TypedBinaryOperationNumericException : public virtual TargetTypedNumericException<T>, public virtual BinaryOperationNumericException {
-    T _a;
-    T _b;
-
-  public:
-    TypedBinaryOperationNumericException (CheckedIntegerOperationsType operation, T a, T b) : BinaryOperationNumericException (operation), _a (a), _b (b) {
-    }
-
-    T a () const {
-      return _a;
-    }
-
-    T b () const {
-      return _b;
-    }
-  };
-
-  template <typename T> class TypedBinaryOperationOverflowException : public virtual TypedBinaryOperationNumericException<T>, public virtual BinaryOperationOverflowException {
-  public:
-    TypedBinaryOperationOverflowException (CheckedIntegerOperationsType operation, T a, T b) : BinaryOperationNumericException (operation), TypedBinaryOperationNumericException<T> (operation, a, b), BinaryOperationOverflowException (operation) {
-    }
-
-    virtual std::string message () const {
-      std::stringstream str;
-
-      str << "Overflow for " << Intern::intToString (TypedBinaryOperationNumericException<T>::a ()) << " " << TypedBinaryOperationNumericException<T>::operation () << " " << Intern::intToString (TypedBinaryOperationNumericException<T>::b ()) << ". " << TargetTypedNumericException<T>::targetTypeInfo ();
-      
-      return str.str ();
-    }
-  };
-
   template <typename From, typename To>
   class TypedConversionOverflowException : public virtual TargetTypedNumericException<To>, public virtual ConversionOverflowException {
     From _value;
@@ -173,24 +96,6 @@ namespace Core {
       std::stringstream str;
       typedef std::numeric_limits<To> target;
       str << "Error converting from " << Type::getName<From> () << " to " << Type::getName<To> () << ": " << Intern::intToString (value ()) << " is not in [" << Intern::intToString (target::min ()) << ";" << Intern::intToString (target::max ()) << "]";
-      return str.str ();
-    }
-  };
-
-  template <typename T> class TypedDivisionByZeroException : public virtual TargetTypedNumericException<T>, public virtual DivisionByZeroException {
-    T _dividend;
-
-  public:
-    TypedDivisionByZeroException (CheckedIntegerOperationsType operation, T dividend) : BinaryOperationNumericException (operation), DivisionByZeroException (operation), _dividend (dividend) {
-    }
-
-    T dividend () const {
-      return _dividend;
-    }
-
-    virtual std::string message () const {
-      std::stringstream str;
-      str << "Error: Division by zero in " << Intern::intToString (dividend ()) << " " << operation () << " 0 " << TargetTypedNumericException<T>::targetTypeInfo ();
       return str.str ();
     }
   };

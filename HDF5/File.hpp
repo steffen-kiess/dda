@@ -62,6 +62,8 @@ namespace HDF5 {
 
     void* getVFDHandle (FileAccessPropList fapl = FileAccessPropList ()) const;
     int getVFDHandleFD (FileAccessPropList fapl = FileAccessPropList ()) const;
+
+    std::string getFileName () const;
   };
 }
 

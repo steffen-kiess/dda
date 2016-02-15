@@ -35,6 +35,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <sys/socket.h>
 
 namespace Core {
   class UnixFile {
@@ -57,6 +58,7 @@ namespace Core {
     int dup () const;
 
     static UnixFile open (const boost::filesystem::path& path, int flags, mode_t mode = 0);
+    static UnixFile socket (int domain, int type, int protocol);
   };
 }
 

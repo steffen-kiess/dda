@@ -22,14 +22,14 @@
 
 #include <HDF5/StdVectorSerialization.hpp>
 #include <HDF5/Vector3.hpp>
-#include <HDF5/Matlab.hpp>
+#include <HDF5/MatlabFull.hpp>
 #include <HDF5/MultiArray.hpp>
 #include <HDF5/DelayedArray.hpp>
 
 #include <HDF5/File.hpp>
 #include <HDF5/PropLists.hpp>
 
-#include <utf8.h>
+#include <lib/utf8cpp/utf8.h>
 
 #include <boost/multi_array.hpp>
 

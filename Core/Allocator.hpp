@@ -36,7 +36,9 @@
 #include <cerrno>
 
 #if OS_WIN
+#ifndef _MSC_VER
 #include <mm_malloc.h>
+#endif
 #endif
 
 namespace Core {

@@ -25,6 +25,8 @@
 
 // Methods to get a typename or to get the offset of a field in a type
 
+#include <Core/Util.hpp>
+
 #include <string>
 #include <typeinfo>
 
@@ -51,14 +53,17 @@ namespace Core {
     // Might cause problems for types with a vtable pointer (in particular for
     // types with virtual inheritance)
     template <typename C, typename V>
-    static inline size_t getOffset (V C::* ptr) {
+    NVCC_HOST_DEVICE static inline size_t getOffset (V C::* ptr) {
+#if HAVE_CXX11
+      static_assert (std::is_standard_layout<C>::value, "C is not a standard layout type");
+#endif
       // This works, but is not portable
       // return ((char*) &(((C*) 0)->*ptr)) - ((char*) 0);
 
       // This should be more or less portable. The compiler should optimize this
       // to the above form
       typename boost::aligned_storage<sizeof (V), boost::alignment_of<V>::value>::type val;
-      return ((char*) &(((C*) &val)->*ptr)) - ((char*) &val);
+      return ((const char*) &(((const C*) &val)->*ptr)) - ((const char*) &val);
     }
   }
 }

@@ -25,7 +25,7 @@
 
 // Implementation of hdf5 serialization for std::vector<>
 
-#include <Core/CheckedInteger.hpp>
+#include <Core/CheckedCast.hpp>
 
 #include <HDF5/Serialization.hpp>
 

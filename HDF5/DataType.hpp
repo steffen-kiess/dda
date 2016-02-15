@@ -64,6 +64,10 @@ namespace HDF5 {
     size_t getSize () const;
 
     bool equals (const DataType& other) const;
+
+    std::vector<uint8_t> encode () const;
+
+    H5T_sign_t getSign () const;
   };
 }
 

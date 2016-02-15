@@ -21,17 +21,20 @@
 #
 
 section
-	AddDefs ($(LibDl) $(LibBoost.Filesystem))
+	AddDefs ($(LibDl) $(LibBoost.Filesystem) $(LibBoost.ProgramOptions))
 	CLink (sdi+, Core, Exception Assert \
 		TimeSpan Time Profiling Type Error StrError \
 		OStream StringUtil IStream File WindowsError Memory \
 		Allocator BoostFilesystem CheckedInteger ParsingUtil \
 		NumericException ProgressBar HelpResultException \
-		CheckedIntegerAlias UnixFile)
+		CheckedIntegerAlias UnixFile Null \
+		CheckedCast \
+		NumericCheckedIntegerException)
+	CLink (ed+T, ExcTest, ExcTest Exception OStream IStream StrError Error WindowsError Assert Memory)
 
 LIBS += Core
 
 AddDefs ($(LibBoost.Filesystem))
-CLink (ed+T, ExcTest, ExcTest)
+#CLink (ed+T, ExcTest, ExcTest)
 CLink (ed+t, OStreamTest, OStreamTest)
 CLink (ed+t, Test, Test)

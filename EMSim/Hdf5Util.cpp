@@ -37,7 +37,6 @@ using namespace EMSim;
 int main (int argc, char** argv) {
   typedef boost::program_options::positional_options_description PositionalDescription;
   typedef boost::program_options::options_description Description;
-  typedef boost::program_options::variables_map Map;
   typedef boost::program_options::command_line_style::style_t Style;
 
   const Style style = static_cast<Style> (boost::program_options::command_line_style::unix_style & ~boost::program_options::command_line_style::allow_guessing);

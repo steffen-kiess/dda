@@ -23,11 +23,13 @@
 #ifndef MATH_MATH_HPP_INCLUDED
 #define MATH_MATH_HPP_INCLUDED
 
+#include <Core/Util.hpp>
+
 // Math utility methods
 
 namespace Math {
   template <typename T>
-  inline T squared (T value) {
+  NVCC_HOST_DEVICE inline T squared (T value) {
     return value * value;
   }
 }

@@ -35,7 +35,8 @@ D(char); D(uchar);
 D(short); D(ushort);
 D(int); D(uint);
 D(long); D(ulong);
-S(half); D(float); //D(double);
+//S(half);
+D(float); //D(double);
 #undef D
 #undef S
 

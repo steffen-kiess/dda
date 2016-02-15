@@ -23,6 +23,7 @@
 #include "DataFilesDDA.hpp"
 
 #include <Core/OStream.hpp>
+#include <Core/BoostFilesystem.hpp>
 
 #include <Math/FPTemplateInstances.hpp>
 
